@@ -1,0 +1,23 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install pytest
+        run: pip install pytest
+      - name: Run tests
+        run: python -m pytest tests/ -v
+      - name: Smoke-test the CLI on example policies
+        run: |
+          python src/iam_auditor.py examples/admin_wildcard.json --fail-on HIGH || echo "correctly flagged HIGH"
+          python src/iam_auditor.py examples/least_privilege.json --fail-on LOW
