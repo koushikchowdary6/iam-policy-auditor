@@ -18,25 +18,13 @@ import sys
 from dataclasses import dataclass, field
 from typing import Any
 
-# A small, well-known set of IAM actions that enable privilege escalation
-# (e.g. rewriting policies, creating access keys for other users). Not
-# exhaustive -- a starting set drawn from widely documented escalation paths.
 PRIV_ESC_ACTIONS = {
-    "iam:createpolicyversion",
-    "iam:setdefaultpolicyversion",
-    "iam:attachuserpolicy",
-    "iam:attachrolepolicy",
-    "iam:attachgrouppolicy",
-    "iam:putuserpolicy",
-    "iam:putrolepolicy",
-    "iam:creategrouppolicy",
-    "iam:createaccesskey",
-    "iam:createloginprofile",
-    "iam:updateloginprofile",
-    "iam:passrole",
+    "iam:createpolicyversion", "iam:setdefaultpolicyversion", "iam:attachuserpolicy",
+    "iam:attachrolepolicy", "iam:attachgrouppolicy", "iam:putuserpolicy",
+    "iam:putrolepolicy", "iam:creategrouppolicy", "iam:createaccesskey",
+    "iam:createloginprofile", "iam:updateloginprofile", "iam:passrole",
     "sts:assumerole",
 }
-
 SENSITIVE_SERVICES = {"iam", "kms", "s3", "sts", "secretsmanager", "ec2"}
 
 
@@ -48,12 +36,8 @@ class Finding:
     statement_index: int
 
     def to_dict(self) -> dict[str, Any]:
-        return {
-            "severity": self.severity,
-            "title": self.title,
-            "detail": self.detail,
-            "statement_index": self.statement_index,
-        }
+        return {"severity": self.severity, "title": self.title, "detail": self.detail,
+                "statement_index": self.statement_index}
 
 
 @dataclass
@@ -68,10 +52,10 @@ class AuditReport:
         return max(self.findings, key=lambda f: order[f.severity]).severity
 
     def counts(self) -> dict[str, int]:
-        c = {"HIGH": 0, "MEDIUM": 0, "LOW": 0}
-        for f in self.findings:
-            c[f.severity] += 1
-        return c
+        counts = {"HIGH": 0, "MEDIUM": 0, "LOW": 0}
+        for finding in self.findings:
+            counts[finding.severity] += 1
+        return counts
 
 
 def _as_list(value: Any) -> list[str]:
@@ -85,78 +69,86 @@ def _as_list(value: Any) -> list[str]:
 def audit_statement(stmt: dict[str, Any], index: int) -> list[Finding]:
     findings: list[Finding] = []
     if stmt.get("Effect") != "Allow":
-        return findings  # Deny statements reduce risk; we focus on Allow.
+        return findings
 
     actions = [a.lower() for a in _as_list(stmt.get("Action"))]
+    not_actions = [a.lower() for a in _as_list(stmt.get("NotAction"))]
     resources = _as_list(stmt.get("Resource"))
     has_condition = bool(stmt.get("Condition"))
     principal = stmt.get("Principal")
 
-    # 1. Action:* on Resource:* -- effectively admin.
+    # Allow + NotAction means "allow everything except ...". On Resource '*'
+    # this is easy to mistake for a narrow deny-list while actually granting a
+    # very broad capability set, so surface it prominently.
+    if not_actions:
+        severity = "HIGH" if "*" in resources else "MEDIUM"
+        findings.append(Finding(
+            severity, "Broad NotAction allow",
+            "Allow with NotAction grants every action except the exclusions "
+            f"{not_actions}. Prefer an explicit Action allow-list; review the "
+            "resource scope carefully because new AWS actions may become allowed "
+            "without a policy change.", index))
+
     if "*" in actions and "*" in resources:
         findings.append(Finding(
             "HIGH", "Full administrative wildcard",
-            "Statement allows Action '*' on Resource '*' -- this grants "
-            "effectively unlimited permissions. Scope actions and resources "
-            "to the minimum required.",
+            "Statement allows Action '*' on Resource '*' -- this grants effectively "
+            "unlimited permissions. Scope actions and resources to the minimum required.",
             index))
     else:
-        # 2. Wildcard actions (service:* or *) short of full admin.
         if any(a == "*" or a.endswith(":*") for a in actions):
             findings.append(Finding(
                 "MEDIUM", "Wildcard action",
-                "Statement uses a wildcard action (e.g. 's3:*'). Prefer "
-                "explicit actions so new, possibly dangerous actions aren't "
-                "granted automatically.",
+                "Statement uses a wildcard action (e.g. 's3:*'). Prefer explicit "
+                "actions so new, possibly dangerous actions aren't granted automatically.",
                 index))
-        # 3. Wildcard resource on sensitive services.
         if "*" in resources:
             services = {a.split(":")[0] for a in actions if ":" in a}
             if services & SENSITIVE_SERVICES:
                 findings.append(Finding(
                     "MEDIUM", "Wildcard resource on sensitive service",
                     f"Resource '*' used with sensitive service(s) "
-                    f"{sorted(services & SENSITIVE_SERVICES)}. Restrict to "
-                    "specific ARNs.",
+                    f"{sorted(services & SENSITIVE_SERVICES)}. Restrict to specific ARNs.",
                     index))
 
-    # 4. Privilege-escalation actions.
     esc = sorted(a for a in actions if a in PRIV_ESC_ACTIONS)
     if esc:
         findings.append(Finding(
             "HIGH", "Privilege-escalation action",
-            f"Statement allows action(s) {esc} commonly used to escalate "
-            "privileges (rewriting policies, creating credentials, assuming "
-            "roles). Guard these with tight resources and conditions.",
-            index))
+            f"Statement allows action(s) {esc} commonly used to escalate privileges "
+            "(rewriting policies, creating credentials, assuming roles). Guard these "
+            "with tight resources and conditions.", index))
 
-    # 5. Public principal (resource-based policy exposed to everyone).
     if principal == "*" or (isinstance(principal, dict) and principal.get("AWS") == "*"):
         sev = "HIGH" if not has_condition else "MEDIUM"
         findings.append(Finding(
             sev, "Public principal",
-            "Principal '*' exposes this resource to every AWS account/anonymous "
-            "callers" + (" (a Condition is present, which may limit this)."
-                         if has_condition else " with no Condition to limit access."),
-            index))
+            "Principal '*' exposes this resource to every AWS account/anonymous callers" +
+            (" (a Condition is present, which may limit this)." if has_condition
+             else " with no Condition to limit access."), index))
 
-    # 6. Sensitive wildcard action without any condition.
     if any(a == "*" or a.endswith(":*") for a in actions) and not has_condition:
         findings.append(Finding(
             "LOW", "Wildcard action without conditions",
-            "A wildcard action has no Condition block (e.g. MFA, source IP, "
-            "or tag constraints). Conditions add defense in depth.",
-            index))
+            "A wildcard action has no Condition block (e.g. MFA, source IP, or tag "
+            "constraints). Conditions add defense in depth.", index))
 
     return findings
 
 
 def audit_policy(policy: dict[str, Any]) -> AuditReport:
-    report = AuditReport()
+    if not isinstance(policy, dict):
+        raise ValueError("policy must be a JSON object")
     statements = policy.get("Statement", [])
     if isinstance(statements, dict):
         statements = [statements]
+    if not isinstance(statements, list):
+        raise ValueError("Statement must be an object or list of objects")
+
+    report = AuditReport()
     for i, stmt in enumerate(statements):
+        if not isinstance(stmt, dict):
+            raise ValueError(f"Statement #{i} must be an object")
         report.findings.extend(audit_statement(stmt, i))
     return report
 
@@ -169,31 +161,31 @@ def main(argv: list[str] | None = None) -> int:
                         help="exit non-zero if any finding at/above this severity exists")
     args = parser.parse_args(argv)
 
-    raw = sys.stdin.read() if args.policy_file == "-" else open(args.policy_file).read()
     try:
+        if args.policy_file == "-":
+            raw = sys.stdin.read()
+        else:
+            with open(args.policy_file, encoding="utf-8") as handle:
+                raw = handle.read()
         policy = json.loads(raw)
-    except json.JSONDecodeError as exc:
-        print(f"error: not valid JSON: {exc}", file=sys.stderr)
+        report = audit_policy(policy)
+    except (OSError, json.JSONDecodeError, ValueError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
         return 2
 
-    report = audit_policy(policy)
-
     if args.json:
-        print(json.dumps({
-            "highest_severity": report.highest_severity,
-            "counts": report.counts(),
-            "findings": [f.to_dict() for f in report.findings],
-        }, indent=2))
+        print(json.dumps({"highest_severity": report.highest_severity,
+                          "counts": report.counts(),
+                          "findings": [f.to_dict() for f in report.findings]}, indent=2))
+    elif not report.findings:
+        print("No risky statements found. ✅")
     else:
-        if not report.findings:
-            print("No risky statements found. ✅")
-        else:
-            counts = report.counts()
-            print(f"IAM Policy Audit — {counts['HIGH']} HIGH, "
-                  f"{counts['MEDIUM']} MEDIUM, {counts['LOW']} LOW\n")
-            for f in report.findings:
-                print(f"[{f.severity}] {f.title} (statement #{f.statement_index})")
-                print(f"    {f.detail}\n")
+        counts = report.counts()
+        print(f"IAM Policy Audit — {counts['HIGH']} HIGH, {counts['MEDIUM']} MEDIUM, "
+              f"{counts['LOW']} LOW\n")
+        for finding in report.findings:
+            print(f"[{finding.severity}] {finding.title} (statement #{finding.statement_index})")
+            print(f"    {finding.detail}\n")
 
     if args.fail_on:
         order = {"HIGH": 3, "MEDIUM": 2, "LOW": 1, "NONE": 0}
