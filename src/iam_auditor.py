@@ -66,6 +66,22 @@ def _as_list(value: Any) -> list[str]:
     return list(value)
 
 
+def _is_public_principal(principal: Any) -> bool:
+    """Return True when a Principal grants access to everyone.
+
+    AWS accepts Principal values as strings, lists, or dictionaries whose
+    values may themselves be lists. Treat a wildcard in any principal value
+    as public instead of only recognizing {"AWS": "*"}.
+    """
+    if principal == "*":
+        return True
+    if isinstance(principal, list):
+        return any(_is_public_principal(item) for item in principal)
+    if isinstance(principal, dict):
+        return any(_is_public_principal(value) for value in principal.values())
+    return False
+
+
 def audit_statement(stmt: dict[str, Any], index: int) -> list[Finding]:
     findings: list[Finding] = []
     if stmt.get("Effect") != "Allow":
@@ -119,7 +135,7 @@ def audit_statement(stmt: dict[str, Any], index: int) -> list[Finding]:
             "(rewriting policies, creating credentials, assuming roles). Guard these "
             "with tight resources and conditions.", index))
 
-    if principal == "*" or (isinstance(principal, dict) and principal.get("AWS") == "*"):
+    if _is_public_principal(principal):
         sev = "HIGH" if not has_condition else "MEDIUM"
         findings.append(Finding(
             sev, "Public principal",
