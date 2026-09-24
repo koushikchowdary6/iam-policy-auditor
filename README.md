@@ -3,9 +3,9 @@
 [![CI](https://github.com/koushikchowdary6/iam-policy-auditor/actions/workflows/ci.yml/badge.svg)](https://github.com/koushikchowdary6/iam-policy-auditor/actions/workflows/ci.yml)
 
 A static analyzer for **AWS IAM policies.** Point it at a policy JSON and it
-reports risky permissions — wildcards, privilege-escalation actions, public
-exposure, and missing conditions — each with a severity and a plain-English
-explanation.
+reports risky permissions — wildcards, privilege-escalation actions, broad
+`NotAction` allows, public exposure, and missing conditions — each with a
+severity and a plain-English explanation.
 
 It runs **fully offline**: it analyzes the policy document you give it, so it
 needs no AWS credentials and never touches a live account. That makes it safe
@@ -16,6 +16,8 @@ to drop into CI as a guardrail on policy changes.
 | Check | Severity | Why it matters |
 |---|---|---|
 | `Action: "*"` on `Resource: "*"` | HIGH | Effectively account admin |
+| `Allow` + `NotAction` on `Resource: "*"` | HIGH | Grants every action except a deny-list, so new AWS actions can become allowed without a policy change |
+| Scoped `Allow` + `NotAction` | MEDIUM | Still broader and harder to reason about than an explicit action allow-list |
 | Privilege-escalation actions (e.g. `iam:CreatePolicyVersion`, `iam:PassRole`, `sts:AssumeRole`) | HIGH | Lets a principal grant itself more access |
 | `Principal: "*"` with no condition | HIGH | Resource exposed to every account / anonymous |
 | Wildcard action (`s3:*`) | MEDIUM | Silently grants future/dangerous actions |
@@ -50,11 +52,19 @@ IAM Policy Audit — 1 HIGH, 0 MEDIUM, 0 LOW
 
 The build fails if anyone introduces a HIGH-severity permission.
 
-## Tests
+## Regression coverage
 
 ```bash
 pip install pytest && python -m pytest tests/ -v
 ```
+
+The regression suite covers full-admin wildcards, privilege-escalation actions,
+public principals with and without conditions, wildcard actions, broad
+`NotAction` semantics, least-privilege clean cases, deny statements, malformed
+policy shapes, and every bundled example policy. In particular, the
+`NotAction` tests distinguish a global-resource allow (HIGH) from a
+resource-scoped allow (MEDIUM), so that easy-to-misread IAM construct cannot
+silently regress.
 
 ## Scope & honesty
 
