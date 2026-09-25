@@ -94,3 +94,11 @@ def test_example_files_parse_and_audit():
     examples = Path(__file__).resolve().parent.parent / "examples"
     for path in examples.glob("*.json"):
         audit_policy(json.loads(path.read_text()))
+
+
+def test_public_principal_nested_aws_list_is_high():
+    policy = {"Statement": [{"Effect": "Allow", "Principal": {"AWS": ["arn:aws:iam::123:root", "*"]},
+                             "Action": "s3:GetObject", "Resource": "arn:aws:s3:::b/*"}]}
+    report = audit_policy(policy)
+    assert "Public principal" in _titles(report)
+    assert report.highest_severity == "HIGH"
