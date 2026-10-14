@@ -82,6 +82,11 @@ def _is_public_principal(principal: Any) -> bool:
     return False
 
 
+def _has_action_pattern(action: str) -> bool:
+    """AWS IAM Action supports glob-style * and ? within action names."""
+    return "*" in action or "?" in action
+
+
 def audit_statement(stmt: dict[str, Any], index: int) -> list[Finding]:
     findings: list[Finding] = []
     if stmt.get("Effect") != "Allow":
@@ -112,10 +117,10 @@ def audit_statement(stmt: dict[str, Any], index: int) -> list[Finding]:
             "unlimited permissions. Scope actions and resources to the minimum required.",
             index))
     else:
-        if any(a == "*" or a.endswith(":*") for a in actions):
+        if any(_has_action_pattern(a) for a in actions):
             findings.append(Finding(
                 "MEDIUM", "Wildcard action",
-                "Statement uses a wildcard action (e.g. 's3:*'). Prefer explicit "
+                "Statement uses a wildcard action (e.g. 's3:Get*' or 'iam:PassR?le'). Prefer explicit "
                 "actions so new, possibly dangerous actions aren't granted automatically.",
                 index))
         if "*" in resources:
@@ -143,7 +148,7 @@ def audit_statement(stmt: dict[str, Any], index: int) -> list[Finding]:
             (" (a Condition is present, which may limit this)." if has_condition
              else " with no Condition to limit access."), index))
 
-    if any(a == "*" or a.endswith(":*") for a in actions) and not has_condition:
+    if any(_has_action_pattern(a) for a in actions) and not has_condition:
         findings.append(Finding(
             "LOW", "Wildcard action without conditions",
             "A wildcard action has no Condition block (e.g. MFA, source IP, or tag "
