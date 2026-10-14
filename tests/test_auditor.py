@@ -102,3 +102,19 @@ def test_public_principal_nested_aws_list_is_high():
     report = audit_policy(policy)
     assert "Public principal" in _titles(report)
     assert report.highest_severity == "HIGH"
+
+
+@pytest.mark.parametrize("action", ["s3:Get*", "iam:PassR?le", "secretsmanager:GetSecretVal*"])
+def test_partial_action_wildcards_are_flagged(action):
+    policy = {"Statement": [{"Effect": "Allow", "Action": action,
+                              "Resource": "arn:aws:s3:::reports/*"}]}
+    report = audit_policy(policy)
+    assert "Wildcard action" in _titles(report)
+    assert "Wildcard action without conditions" in _titles(report)
+
+
+def test_exact_action_does_not_trigger_wildcard_finding():
+    policy = {"Statement": [{"Effect": "Allow", "Action": "s3:GetObject",
+                              "Resource": "arn:aws:s3:::reports/*"}]}
+    report = audit_policy(policy)
+    assert "Wildcard action" not in _titles(report)
