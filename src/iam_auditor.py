@@ -15,6 +15,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from fnmatch import fnmatchcase
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -87,6 +88,24 @@ def _has_action_pattern(action: str) -> bool:
     return "*" in action or "?" in action
 
 
+def _privilege_escalation_matches(actions: list[str]) -> list[str]:
+    """Return known escalation actions granted by exact or glob Action entries.
+
+    IAM action names are case-insensitive and normalized to lowercase before
+    this helper is called. A global '*' is handled separately as full admin to
+    avoid producing a noisy duplicate finding for every known escalation path.
+    """
+    matched: set[str] = set()
+    for pattern in actions:
+        if pattern == "*":
+            continue
+        matched.update(
+            candidate for candidate in PRIV_ESC_ACTIONS
+            if fnmatchcase(candidate, pattern)
+        )
+    return sorted(matched)
+
+
 def audit_statement(stmt: dict[str, Any], index: int) -> list[Finding]:
     findings: list[Finding] = []
     if stmt.get("Effect") != "Allow":
@@ -132,12 +151,12 @@ def audit_statement(stmt: dict[str, Any], index: int) -> list[Finding]:
                     f"{sorted(services & SENSITIVE_SERVICES)}. Restrict to specific ARNs.",
                     index))
 
-    esc = sorted(a for a in actions if a in PRIV_ESC_ACTIONS)
+    esc = _privilege_escalation_matches(actions)
     if esc:
         findings.append(Finding(
             "HIGH", "Privilege-escalation action",
-            f"Statement allows action(s) {esc} commonly used to escalate privileges "
-            "(rewriting policies, creating credentials, assuming roles). Guard these "
+            f"Statement grants action(s) {esc} commonly used to escalate privileges "
+            "(including grants reached through IAM Action wildcards). Guard these "
             "with tight resources and conditions.", index))
 
     if _is_public_principal(principal):
