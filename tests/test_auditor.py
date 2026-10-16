@@ -118,3 +118,39 @@ def test_exact_action_does_not_trigger_wildcard_finding():
                               "Resource": "arn:aws:s3:::reports/*"}]}
     report = audit_policy(policy)
     assert "Wildcard action" not in _titles(report)
+
+
+@pytest.mark.parametrize(
+    "action, expected_match",
+    [
+        ("iam:PassR?le", "iam:passrole"),
+        ("iam:Attach*Policy", "iam:attachrolepolicy"),
+        ("sts:Assume*", "sts:assumerole"),
+    ],
+)
+def test_privilege_escalation_action_patterns_are_high(action, expected_match):
+    policy = {
+        "Statement": [{
+            "Effect": "Allow",
+            "Action": action,
+            "Resource": "arn:aws:iam::123456789012:role/example",
+        }]
+    }
+    report = audit_policy(policy)
+    findings = [f for f in report.findings if f.title == "Privilege-escalation action"]
+    assert findings
+    assert report.highest_severity == "HIGH"
+    assert expected_match in findings[0].detail
+
+
+def test_unrelated_action_pattern_does_not_become_privilege_escalation():
+    policy = {
+        "Statement": [{
+            "Effect": "Allow",
+            "Action": "s3:Get*",
+            "Resource": "arn:aws:s3:::reports/*",
+        }]
+    }
+    report = audit_policy(policy)
+    assert "Wildcard action" in _titles(report)
+    assert "Privilege-escalation action" not in _titles(report)
