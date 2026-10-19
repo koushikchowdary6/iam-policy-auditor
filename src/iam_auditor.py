@@ -60,11 +60,14 @@ class AuditReport:
 
 
 def _as_list(value: Any) -> list[str]:
+    """Normalize IAM string-or-string-array fields, rejecting malformed JSON."""
     if value is None:
         return []
     if isinstance(value, str):
         return [value]
-    return list(value)
+    if isinstance(value, list) and all(isinstance(item, str) for item in value):
+        return value
+    raise ValueError("Action, NotAction, and Resource must be strings or arrays of strings")
 
 
 def _is_public_principal(principal: Any) -> bool:
