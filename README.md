@@ -17,6 +17,7 @@ to drop into CI as a guardrail on policy changes.
 |---|---|---|
 | `Action: "*"` on `Resource: "*"` | HIGH | Effectively account admin |
 | `Allow` + `NotAction` on `Resource: "*"` | HIGH | Grants every action except a deny-list, so new AWS actions can become allowed without a policy change |
+| `Allow` + `NotResource` with `Action: "*"` or `s3:*` (or `NotAction`) | HIGH | Excluding selected resources does not restrict broad actions on all other resources |
 | Scoped `Allow` + `NotAction` | MEDIUM | Still broader and harder to reason about than an explicit action allow-list |
 | Privilege-escalation actions (e.g. `iam:CreatePolicyVersion`, `iam:PassRole`, `sts:AssumeRole`) | HIGH | Lets a principal grant itself more access |
 | `Principal: "*"` with no condition | HIGH | Resource exposed to every account / anonymous |

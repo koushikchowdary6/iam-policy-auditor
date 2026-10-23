@@ -130,7 +130,11 @@ def audit_statement(stmt: dict[str, Any], index: int) -> list[Finding]:
     not_actions = [a.lower() for a in _as_list(stmt.get("NotAction"))]
     resources = _as_list(stmt.get("Resource"))
     not_resources = _as_list(stmt.get("NotResource"))
-    if not_resources and ("*" in actions or not_actions):
+    # NotResource excludes only named ARNs; a service-wide wildcard still
+    # grants every action in that service on all other resources. A global
+    # action wildcard is not the only dangerous combination.
+    service_wildcard = any(a.endswith(":*") for a in actions)
+    if not_resources and ("*" in actions or service_wildcard or not_actions):
         findings.append(Finding(
             "HIGH", "Broad NotResource allow",
             "Allow with NotResource excludes only the listed resources; combined "
