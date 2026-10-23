@@ -110,13 +110,33 @@ def _privilege_escalation_matches(actions: list[str]) -> list[str]:
 
 
 def audit_statement(stmt: dict[str, Any], index: int) -> list[Finding]:
+    # Reject malformed policy statements instead of silently reporting no risk.
+    effect = stmt.get("Effect")
+    if effect not in ("Allow", "Deny"):
+        raise ValueError(f"Statement #{index}: Effect must be Allow or Deny")
+    if ("Action" in stmt) == ("NotAction" in stmt):
+        raise ValueError(f"Statement #{index}: exactly one of Action/NotAction is required")
+    if ("Resource" in stmt) == ("NotResource" in stmt):
+        raise ValueError(f"Statement #{index}: exactly one of Resource/NotResource is required")
+    for key in ("Action", "NotAction", "Resource", "NotResource"):
+        if key in stmt and (not _as_list(stmt[key]) or any(not v.strip() for v in _as_list(stmt[key]))):
+            raise ValueError(f"Statement #{index}: {key} must contain non-empty strings")
+
     findings: list[Finding] = []
-    if stmt.get("Effect") != "Allow":
+    if effect == "Deny":
         return findings
 
     actions = [a.lower() for a in _as_list(stmt.get("Action"))]
     not_actions = [a.lower() for a in _as_list(stmt.get("NotAction"))]
     resources = _as_list(stmt.get("Resource"))
+    not_resources = _as_list(stmt.get("NotResource"))
+    if not_resources and ("*" in actions or not_actions):
+        findings.append(Finding(
+            "HIGH", "Broad NotResource allow",
+            "Allow with NotResource excludes only the listed resources; combined "
+            "with a global action or NotAction it can grant broad access to "
+            "other resources. Prefer explicit least-privilege Resource ARNs.",
+            index))
     has_condition = bool(stmt.get("Condition"))
     principal = stmt.get("Principal")
 
