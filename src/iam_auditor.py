@@ -16,6 +16,7 @@ import argparse
 import json
 import sys
 from fnmatch import fnmatchcase
+from ipaddress import ip_network
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -111,15 +112,39 @@ def _condition_scopes_public_principal(condition: Any) -> bool:
             ):
                 raise ValueError(f"Condition {operator}/{key}: invalid values")
             op, context_key = operator.lower(), key.lower()
-            if (
-                (op == "ipaddress" and context_key == "aws:sourceip")
-                or (op in ("stringequals", "stringlike") and context_key in {
-                    "aws:principalorgid", "aws:principalaccount",
-                    "aws:sourcevpc", "aws:sourcevpce",
-                })
-                or (op in ("arnequals", "arnlike") and context_key == "aws:principalarn")
-            ):
-                scoped = True
+            if op == "ipaddress" and context_key == "aws:sourceip":
+                # A /0 CIDR (even alongside narrow CIDRs) permits the entire
+                # address family, so it cannot justify lowering public risk.
+                try:
+                    restricted = all(
+                        ip_network(str(v), strict=False).prefixlen > 0
+                        for v in values
+                    )
+                except ValueError:
+                    restricted = False
+                scoped = scoped or restricted
+            elif op in ("stringequals", "stringlike") and context_key in {
+                "aws:principalorgid", "aws:principalaccount",
+                "aws:sourcevpc", "aws:sourcevpce",
+            }:
+                # A wildcard pattern is not a concrete organization, account,
+                # or network boundary; do not downgrade public access for it.
+                scoped = scoped or all(
+                    isinstance(v, str) and not any(c in v for c in "*?")
+                    for v in values
+                )
+            elif op in ("arnequals", "arnlike") and context_key == "aws:principalarn":
+                # An ARN may legitimately wildcard role names *within one
+                # fixed AWS account*. Requiring a concrete 12-digit account
+                # prevents arn:aws:iam::*:role/* from being treated as scoped.
+                scoped = scoped or all(
+                    isinstance(v, str)
+                    and len(v.split(":", 5)) == 6
+                    and v.split(":", 5)[0] == "arn"
+                    and len(v.split(":", 5)[4]) == 12
+                    and v.split(":", 5)[4].isdigit()
+                    for v in values
+                )
     return scoped
 
 
