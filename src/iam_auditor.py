@@ -86,6 +86,43 @@ def _is_public_principal(principal: Any) -> bool:
     return False
 
 
+def _condition_scopes_public_principal(condition: Any) -> bool:
+    """Validate IAM Condition structure and recognize *positive* access scoping.
+
+    TLS/MFA requirements can improve security but do not restrict the set of
+    principals admitted by Principal '*'. Negative operators and IfExists
+    clauses also cannot be treated as positive access restrictions.
+    """
+    if not isinstance(condition, dict) or not condition:
+        raise ValueError("Condition must be a non-empty object of operators")
+    scoped = False
+    for operator, entries in condition.items():
+        if not isinstance(operator, str) or not operator.strip():
+            raise ValueError("Condition operators must be non-empty strings")
+        if not isinstance(entries, dict) or not entries:
+            raise ValueError(f"Condition {operator}: must contain context keys")
+        for key, value in entries.items():
+            if not isinstance(key, str) or not key.strip():
+                raise ValueError(f"Condition {operator}: invalid context key")
+            values = value if isinstance(value, list) else [value]
+            if not values or any(
+                not isinstance(v, (str, int, float, bool))
+                or (isinstance(v, str) and not v.strip()) for v in values
+            ):
+                raise ValueError(f"Condition {operator}/{key}: invalid values")
+            op, context_key = operator.lower(), key.lower()
+            if (
+                (op == "ipaddress" and context_key == "aws:sourceip")
+                or (op in ("stringequals", "stringlike") and context_key in {
+                    "aws:principalorgid", "aws:principalaccount",
+                    "aws:sourcevpc", "aws:sourcevpce",
+                })
+                or (op in ("arnequals", "arnlike") and context_key == "aws:principalarn")
+            ):
+                scoped = True
+    return scoped
+
+
 def _has_action_pattern(action: str) -> bool:
     """AWS IAM Action supports glob-style * and ? within action names."""
     return "*" in action or "?" in action
@@ -122,6 +159,14 @@ def audit_statement(stmt: dict[str, Any], index: int) -> list[Finding]:
         if key in stmt and (not _as_list(stmt[key]) or any(not v.strip() for v in _as_list(stmt[key]))):
             raise ValueError(f"Statement #{index}: {key} must contain non-empty strings")
 
+    # Validate conditions even on Deny statements. A malformed Condition
+    # must not cause a public grant to be reported as conditionally restricted.
+    condition = stmt.get("Condition")
+    scopes_public_principal = (
+        _condition_scopes_public_principal(condition)
+        if "Condition" in stmt else False
+    )
+
     findings: list[Finding] = []
     if effect == "Deny":
         return findings
@@ -141,7 +186,7 @@ def audit_statement(stmt: dict[str, Any], index: int) -> list[Finding]:
             "with a global action or NotAction it can grant broad access to "
             "other resources. Prefer explicit least-privilege Resource ARNs.",
             index))
-    has_condition = bool(stmt.get("Condition"))
+    has_condition = "Condition" in stmt
     principal = stmt.get("Principal")
 
     # Allow + NotAction means "allow everything except ...". On Resource '*'
@@ -187,12 +232,16 @@ def audit_statement(stmt: dict[str, Any], index: int) -> list[Finding]:
             "with tight resources and conditions.", index))
 
     if _is_public_principal(principal):
-        sev = "HIGH" if not has_condition else "MEDIUM"
+        # A TLS-only or MFA-only Condition does not make Principal '*'
+        # private; downgrade only for a recognized positive network/principal
+        # scope. This is heuristic risk analysis, not IAM policy simulation.
+        sev = "MEDIUM" if scopes_public_principal else "HIGH"
         findings.append(Finding(
             sev, "Public principal",
             "Principal '*' exposes this resource to every AWS account/anonymous callers" +
-            (" (a Condition is present, which may limit this)." if has_condition
-             else " with no Condition to limit access."), index))
+            (" (a positive network/principal scoping Condition is present; verify its scope)."
+             if scopes_public_principal
+             else " (no recognized positive principal/network restriction)."), index))
 
     if any(_has_action_pattern(a) for a in actions) and not has_condition:
         findings.append(Finding(
