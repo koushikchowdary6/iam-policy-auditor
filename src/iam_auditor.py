@@ -123,22 +123,28 @@ def _condition_scopes_public_principal(condition: Any) -> bool:
                 except ValueError:
                     restricted = False
                 scoped = scoped or restricted
-            elif (
-                (op in ("stringequals", "stringlike") and context_key in {
-                    "aws:principalorgid", "aws:principalaccount",
-                    "aws:sourcevpc", "aws:sourcevpce",
-                })
-                or (op in ("arnequals", "arnlike") and context_key == "aws:principalarn")
-            ):
-                # Wildcard-only or wildcard-pattern values do not establish
-                # a specific trusted principal, account, or network boundary.
-                # Stay conservative: a HIGH finding is preferable to a false
-                # assurance of restricted public access.
-                restricted = all(
+            elif op in ("stringequals", "stringlike") and context_key in {
+                "aws:principalorgid", "aws:principalaccount",
+                "aws:sourcevpc", "aws:sourcevpce",
+            }:
+                # A wildcard pattern is not a concrete organization, account,
+                # or network boundary; do not downgrade public access for it.
+                scoped = scoped or all(
                     isinstance(v, str) and not any(c in v for c in "*?")
                     for v in values
                 )
-                scoped = scoped or restricted
+            elif op in ("arnequals", "arnlike") and context_key == "aws:principalarn":
+                # An ARN may legitimately wildcard role names *within one
+                # fixed AWS account*. Requiring a concrete 12-digit account
+                # prevents arn:aws:iam::*:role/* from being treated as scoped.
+                scoped = scoped or all(
+                    isinstance(v, str)
+                    and len(v.split(":", 5)) == 6
+                    and v.split(":", 5)[0] == "arn"
+                    and len(v.split(":", 5)[4]) == 12
+                    and v.split(":", 5)[4].isdigit()
+                    for v in values
+                )
     return scoped
 
 
