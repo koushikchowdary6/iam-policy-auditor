@@ -59,7 +59,8 @@ def test_missing_action_and_resource_selectors_are_rejected():
 
 @pytest.mark.parametrize(
     "action_fields",
-    [{"Action": "*"}, {"NotAction": "iam:DeleteRole"}],
+    [{"Action": "*"}, {"Action": "s3:*"}, {"Action": "IAM:*"},
+     {"NotAction": "iam:DeleteRole"}],
 )
 def test_broad_notresource_allow_is_high(action_fields):
     stmt = {"Effect": "Allow", "NotResource": "arn:aws:s3:::private/*", **action_fields}
@@ -106,3 +107,22 @@ def test_cli_rejects_empty_policy_instead_of_reporting_clean(tmp_path, capsys):
     captured = capsys.readouterr()
     assert "Statement" in captured.err
     assert "No risky statements found" not in captured.out
+
+
+
+def test_scoped_action_notresource_does_not_trigger_service_wildcard():
+    policy = {"Statement": [{
+        "Effect": "Allow", "Action": "s3:GetObject",
+        "NotResource": "arn:aws:s3:::private/*",
+    }]}
+    report = audit_policy(policy)
+    assert not any(f.title == "Broad NotResource allow" for f in report.findings)
+
+
+def test_deny_service_wildcard_notresource_does_not_trigger_allow_finding():
+    policy = {"Statement": [{
+        "Effect": "Deny", "Action": "s3:*",
+        "NotResource": "arn:aws:s3:::public/*",
+    }]}
+    report = audit_policy(policy)
+    assert report.findings == []
