@@ -83,3 +83,26 @@ def test_valid_deny_with_notresource_has_no_findings():
         "Effect": "Deny", "Action": "*", "NotResource": "arn:aws:s3:::public/*",
     }]})
     assert report.findings == []
+
+
+@pytest.mark.parametrize("policy", [
+    {},
+    {"Version": "2012-10-17"},
+    {"Statement": []},
+    {"Statement": None},
+])
+def test_missing_or_empty_policy_statements_are_rejected(policy):
+    """Malformed inputs must not be presented as least-privilege policies."""
+    with pytest.raises(ValueError, match="Statement"):
+        audit_policy(policy)
+
+
+def test_cli_rejects_empty_policy_instead_of_reporting_clean(tmp_path, capsys):
+    from iam_auditor import main
+
+    path = tmp_path / "empty-policy.json"
+    path.write_text('{"Statement": []}', encoding="utf-8")
+    assert main([str(path)]) == 2
+    captured = capsys.readouterr()
+    assert "Statement" in captured.err
+    assert "No risky statements found" not in captured.out

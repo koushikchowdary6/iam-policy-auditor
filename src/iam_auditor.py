@@ -202,11 +202,15 @@ def audit_statement(stmt: dict[str, Any], index: int) -> list[Finding]:
 def audit_policy(policy: dict[str, Any]) -> AuditReport:
     if not isinstance(policy, dict):
         raise ValueError("policy must be a JSON object")
-    statements = policy.get("Statement", [])
+    # A missing or empty Statement is not a valid IAM policy. Reporting it as
+    # "No risky statements found" could give a false assurance of safety.
+    if "Statement" not in policy:
+        raise ValueError("Statement is required")
+    statements = policy["Statement"]
     if isinstance(statements, dict):
         statements = [statements]
-    if not isinstance(statements, list):
-        raise ValueError("Statement must be an object or list of objects")
+    if not isinstance(statements, list) or not statements:
+        raise ValueError("Statement must be a non-empty object or list of objects")
 
     report = AuditReport()
     for i, stmt in enumerate(statements):
