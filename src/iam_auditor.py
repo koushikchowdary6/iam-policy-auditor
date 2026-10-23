@@ -16,6 +16,7 @@ import argparse
 import json
 import sys
 from fnmatch import fnmatchcase
+from ipaddress import ip_network
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -111,15 +112,33 @@ def _condition_scopes_public_principal(condition: Any) -> bool:
             ):
                 raise ValueError(f"Condition {operator}/{key}: invalid values")
             op, context_key = operator.lower(), key.lower()
-            if (
-                (op == "ipaddress" and context_key == "aws:sourceip")
-                or (op in ("stringequals", "stringlike") and context_key in {
+            if op == "ipaddress" and context_key == "aws:sourceip":
+                # A /0 CIDR (even alongside narrow CIDRs) permits the entire
+                # address family, so it cannot justify lowering public risk.
+                try:
+                    restricted = all(
+                        ip_network(str(v), strict=False).prefixlen > 0
+                        for v in values
+                    )
+                except ValueError:
+                    restricted = False
+                scoped = scoped or restricted
+            elif (
+                (op in ("stringequals", "stringlike") and context_key in {
                     "aws:principalorgid", "aws:principalaccount",
                     "aws:sourcevpc", "aws:sourcevpce",
                 })
                 or (op in ("arnequals", "arnlike") and context_key == "aws:principalarn")
             ):
-                scoped = True
+                # Wildcard-only or wildcard-pattern values do not establish
+                # a specific trusted principal, account, or network boundary.
+                # Stay conservative: a HIGH finding is preferable to a false
+                # assurance of restricted public access.
+                restricted = all(
+                    isinstance(v, str) and not any(c in v for c in "*?")
+                    for v in values
+                )
+                scoped = scoped or restricted
     return scoped
 
 
