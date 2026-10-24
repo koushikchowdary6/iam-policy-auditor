@@ -158,6 +158,29 @@ def _has_action_pattern(action: str) -> bool:
     return "*" in action or "?" in action
 
 
+def _is_broad_resource_arn(resource: str) -> bool:
+    """Identify wildcards that span accounts, regions, or resource identities.
+
+    A scoped path such as arn:aws:s3:::reports/2026/* is a common,
+    legitimate least-privilege pattern. By contrast, a wildcard in the
+    bucket name, account ID, region, or leading ARN resource selector can
+    match entirely different resources and deserves a finding.
+    This is a heuristic, not a full IAM authorization simulator.
+    """
+    parts = resource.split(":", 5)
+    if len(parts) != 6 or parts[0].lower() != "arn":
+        return False
+    _, _, service, region, account, identifier = parts
+    if not service or not identifier:
+        return False
+    if any(char in region or char in account for char in "*?"):
+        return True
+    # Preserve legitimate wildcards *within* a named bucket or resource
+    # path while detecting wildcard bucket names and leading selectors.
+    root = identifier.split("/", 1)[0].split(":", 1)[0]
+    return any(char in root for char in "*?")
+
+
 def _privilege_escalation_matches(actions: list[str]) -> list[str]:
     """Return known escalation actions granted by exact or glob Action entries.
 
@@ -262,6 +285,19 @@ def audit_statement(stmt: dict[str, Any], index: int) -> list[Finding]:
                     f"Resource '*' used with sensitive service(s) "
                     f"{sorted(services & SENSITIVE_SERVICES)}. Restrict to specific ARNs.",
                     index))
+
+    # Resource '*' is covered above, but wildcard ARN account IDs and
+    # resource identities can be just as broad while appearing scoped.
+    # Avoid flagging a wildcard *inside* a named resource's path.
+    if (any(_is_broad_resource_arn(resource) for resource in resources)
+            and ("*" in actions or any(
+                action.split(":", 1)[0] in SENSITIVE_SERVICES for action in actions
+            ))):
+        findings.append(Finding(
+            "MEDIUM", "Broad resource ARN pattern",
+            "A wildcard in an ARN account, region, or resource identity can "
+            "grant access beyond a named resource. Scope the ARN to the "
+            "intended account and resource identifiers.", index))
 
     esc = _privilege_escalation_matches(actions)
     if esc:
