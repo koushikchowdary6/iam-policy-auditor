@@ -16,7 +16,7 @@ import argparse
 import json
 import sys
 from fnmatch import fnmatchcase
-from ipaddress import ip_network
+from ipaddress import collapse_addresses, ip_network
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -113,12 +113,17 @@ def _condition_scopes_public_principal(condition: Any) -> bool:
                 raise ValueError(f"Condition {operator}/{key}: invalid values")
             op, context_key = operator.lower(), key.lower()
             if op == "ipaddress" and context_key == "aws:sourceip":
-                # A /0 CIDR (even alongside narrow CIDRs) permits the entire
-                # address family, so it cannot justify lowering public risk.
+                # Multiple CIDRs are OR-ed by IAM. Two /1 networks can cover
+                # an entire address family even though neither is a /0.
+                # Collapse the union per IP version before treating it as
+                # a meaningful network restriction.
                 try:
+                    networks = [ip_network(str(v), strict=False) for v in values]
                     restricted = all(
-                        ip_network(str(v), strict=False).prefixlen > 0
-                        for v in values
+                        all(net.prefixlen > 0 for net in collapse_addresses(
+                            n for n in networks if n.version == version
+                        ))
+                        for version in (4, 6)
                     )
                 except ValueError:
                     restricted = False
