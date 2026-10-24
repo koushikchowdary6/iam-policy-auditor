@@ -303,6 +303,35 @@ def audit_policy(policy: dict[str, Any]) -> AuditReport:
     return report
 
 
+def _reject_duplicate_json_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    """Reject ambiguous policy JSON instead of silently accepting last-key-wins.
+
+    Python's default json.loads behavior can turn an Allow into a Deny (or
+    replace a dangerous Action) when an attacker supplies duplicate keys.
+    Auditing the resulting dictionary would falsely report a clean policy.
+    """
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError(f"duplicate JSON key: {key}")
+        result[key] = value
+    return result
+
+
+def _reject_nonstandard_json_constant(value: str) -> None:
+    """Disallow NaN/Infinity; AWS policy documents require standard JSON."""
+    raise ValueError(f"non-standard JSON value: {value}")
+
+
+def parse_policy_json(raw: str) -> dict[str, Any]:
+    """Parse strict JSON before performing the IAM policy audit."""
+    return json.loads(
+        raw,
+        object_pairs_hook=_reject_duplicate_json_keys,
+        parse_constant=_reject_nonstandard_json_constant,
+    )
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Audit an AWS IAM policy JSON for risky permissions")
     parser.add_argument("policy_file", help="path to a policy JSON file, or '-' for stdin")
@@ -317,7 +346,7 @@ def main(argv: list[str] | None = None) -> int:
         else:
             with open(args.policy_file, encoding="utf-8") as handle:
                 raw = handle.read()
-        policy = json.loads(raw)
+        policy = parse_policy_json(raw)
         report = audit_policy(policy)
     except (OSError, json.JSONDecodeError, ValueError) as exc:
         print(f"error: {exc}", file=sys.stderr)
