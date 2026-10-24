@@ -24,6 +24,7 @@ to drop into CI as a guardrail on policy changes.
 | `Principal: "*"` with no condition | HIGH | Resource exposed to every account / anonymous |
 | Wildcard action (`s3:*`) | MEDIUM | Silently grants future/dangerous actions |
 | Wildcard resource on a sensitive service (iam, kms, s3, sts…) | MEDIUM | Over-broad blast radius |
+| Wildcard account/region or resource identity in a sensitive-service ARN (for example `arn:aws:s3:::*`) | MEDIUM | An ARN can look scoped while matching unrelated buckets, accounts, or regions |
 | Wildcard action with no `Condition` | LOW | Missing defense-in-depth (MFA, source IP, tags) |
 
 ## Usage
@@ -68,6 +69,9 @@ policy shapes, and every bundled example policy. In particular, the
 resource-scoped allow (MEDIUM). The `NotResource` tests also distinguish
 broad-action exclusions (HIGH) from narrow-action exclusions (MEDIUM),
 preventing a resource-wide grant from being mistaken for a clean policy.
+The ARN-pattern tests distinguish wildcard bucket/account identities from
+legitimate path wildcards under a named resource. These are heuristic warnings,
+not a full IAM policy evaluation.
 
 ## Scope & honesty
 
