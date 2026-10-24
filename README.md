@@ -18,6 +18,7 @@ to drop into CI as a guardrail on policy changes.
 | `Action: "*"` on `Resource: "*"` | HIGH | Effectively account admin |
 | `Allow` + `NotAction` on `Resource: "*"` | HIGH | Grants every action except a deny-list, so new AWS actions can become allowed without a policy change |
 | `Allow` + `NotResource` with `Action: "*"` or `s3:*` (or `NotAction`) | HIGH | Excluding selected resources does not restrict broad actions on all other resources |
+| `Allow` + `NotResource` with a narrow action (`s3:GetObject`) | MEDIUM | Still grants that action on **all resources except** the exclusions; not an allow-list |
 | Scoped `Allow` + `NotAction` | MEDIUM | Still broader and harder to reason about than an explicit action allow-list |
 | Privilege-escalation actions (e.g. `iam:CreatePolicyVersion`, `iam:PassRole`, `sts:AssumeRole`) | HIGH | Lets a principal grant itself more access |
 | `Principal: "*"` with no condition | HIGH | Resource exposed to every account / anonymous |
@@ -64,8 +65,9 @@ public principals with and without conditions, wildcard actions, broad
 `NotAction` semantics, least-privilege clean cases, deny statements, malformed
 policy shapes, and every bundled example policy. In particular, the
 `NotAction` tests distinguish a global-resource allow (HIGH) from a
-resource-scoped allow (MEDIUM), so that easy-to-misread IAM construct cannot
-silently regress.
+resource-scoped allow (MEDIUM). The `NotResource` tests also distinguish
+broad-action exclusions (HIGH) from narrow-action exclusions (MEDIUM),
+preventing a resource-wide grant from being mistaken for a clean policy.
 
 ## Scope & honesty
 

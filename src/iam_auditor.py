@@ -216,6 +216,16 @@ def audit_statement(stmt: dict[str, Any], index: int) -> list[Finding]:
             "with a global action or NotAction it can grant broad access to "
             "other resources. Prefer explicit least-privilege Resource ARNs.",
             index))
+    elif not_resources:
+        # Even a single named action applies to every resource except those
+        # excluded. Omitting this finding made broad resource exposure appear
+        # clean whenever the action selector itself was narrow.
+        findings.append(Finding(
+            "MEDIUM", "NotResource expands resource scope",
+            "Allow with NotResource grants the listed actions on every resource "
+            "except the excluded ARNs. This is not a resource allow-list; "
+            "prefer explicit Resource ARNs to limit the blast radius.",
+            index))
     has_condition = "Condition" in stmt
     principal = stmt.get("Principal")
 
