@@ -61,6 +61,14 @@ The build fails if anyone introduces a HIGH-severity permission.
 pip install pytest && python -m pytest tests/ -v
 ```
 
+The auditor rejects unrecognized IAM policy and statement keys rather than
+silently ignoring typos such as `Conditon`, `NotPrinciple`, or `Actions`.
+It accepts standard top-level `Version`, `Id`, and `Statement` fields and
+statement-level `Sid`, `Effect`, `Principal`, `NotPrincipal`, `Action`,
+`NotAction`, `Resource`, `NotResource`, and `Condition`. This is deliberate
+fail-closed validation: unsupported vendor-specific metadata should be
+removed before auditing, not treated as evidence of a safe IAM policy.
+
 The regression suite covers full-admin wildcards, privilege-escalation actions,
 public principals with and without conditions, wildcard actions, broad
 `NotAction` semantics, least-privilege clean cases, deny statements, malformed
