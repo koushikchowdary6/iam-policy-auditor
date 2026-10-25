@@ -40,11 +40,32 @@ def test_wildcard_account_region_or_resource_selector_is_flagged(action, resourc
     assert _titles(action, resource)["Broad resource ARN pattern"] == "MEDIUM"
 
 
+
+@pytest.mark.parametrize("action, resource", [
+    ("iam:GetRole", "arn:aws:iam::123456789012:role/analytics-*"),
+    ("iam:GetRole", "arn:aws:iam::123456789012:role/team/Admin*"),
+    ("iam:GetRole", "arn:aws:iam::123456789012:role/*"),
+    ("iam:GetPolicy", "arn:aws:iam::123456789012:policy/team-?"),
+    ("kms:Decrypt", "arn:aws:kms:us-east-1:123456789012:key/abc*"),
+    ("ec2:DescribeInstances", "arn:aws:ec2:us-east-1:123456789012:instance/i-*"),
+])
+def test_wildcard_resource_identity_after_arn_type_is_flagged(action, resource):
+    assert _titles(action, resource)["Broad resource ARN pattern"] == "MEDIUM"
+
+
+@pytest.mark.parametrize("action, resource", [
+    ("iam:GetRole", "arn:aws:iam::123456789012:role/team/Analytics"),
+    ("kms:Decrypt", "arn:aws:kms:us-east-1:123456789012:key/abc123"),
+    ("ec2:DescribeInstances", "arn:aws:ec2:us-east-1:123456789012:instance/i-123"),
+])
+def test_named_non_s3_resource_identities_remain_clean(action, resource):
+    assert _titles(action, resource) == {}
+
+
 @pytest.mark.parametrize("action, resource", [
     ("s3:GetObject", "arn:aws:s3:::reports-bucket/2026/*"),
     ("s3:GetObject", "arn:aws:s3:::reports-bucket/*"),
     ("s3:GetObject", "arn:aws:s3:::reports-bucket"),
-    ("iam:ListRoles", "arn:aws:iam::123456789012:role/analytics-*"),
 ])
 def test_named_resource_with_scoped_path_wildcard_remains_clean(action, resource):
     assert _titles(action, resource) == {}

@@ -69,9 +69,12 @@ policy shapes, and every bundled example policy. In particular, the
 resource-scoped allow (MEDIUM). The `NotResource` tests also distinguish
 broad-action exclusions (HIGH) from narrow-action exclusions (MEDIUM),
 preventing a resource-wide grant from being mistaken for a clean policy.
-The ARN-pattern tests distinguish wildcard bucket/account identities from
-legitimate path wildcards under a named resource. These are heuristic warnings,
-not a full IAM policy evaluation.
+The ARN-pattern tests distinguish wildcard S3 bucket/account identities from
+legitimate object-prefix wildcards under a named bucket. For IAM role/policy,
+KMS key, and EC2 instance ARNs, wildcards in the identifier after the resource
+type (for example `role/Admin*`, `key/abc*`, or `instance/i-*`) are flagged:
+those patterns can match multiple distinct identities. These are heuristic
+warnings, not a full IAM policy evaluation.
 
 ## Scope & honesty
 
