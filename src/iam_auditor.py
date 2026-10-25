@@ -101,8 +101,12 @@ def _validate_principal(principal: Any, index: int, field_name: str) -> None:
                 and all(isinstance(item, str) and item.strip() for item in value))
 
     if isinstance(principal, dict):
+        # IAM supports exactly these Principal/NotPrincipal mapping keys.
+        # Unknown keys are not meaningful restrictions and must not pass
+        # validation as if they represented legitimate AWS principals.
+        allowed_types = {"AWS", "Service", "Federated", "CanonicalUser"}
         valid = bool(principal) and all(
-            isinstance(key, str) and key.strip() and valid_values(value)
+            key in allowed_types and valid_values(value)
             for key, value in principal.items()
         )
     else:
