@@ -61,6 +61,13 @@ The build fails if anyone introduces a HIGH-severity permission.
 pip install pytest && python -m pytest tests/ -v
 ```
 
+The auditor also validates `Action` and `NotAction` identifiers before
+risk analysis: a selector must be `*` or a `service:operation` glob
+(e.g. `iam:PassR?le`). Misspellings with spaces, missing colons, and
+control characters are rejected instead of silently appearing harmless.
+This is syntax validation, not verification against the full AWS action
+catalog; syntactically valid nonexistent actions are still possible.
+
 The auditor rejects unrecognized IAM policy and statement keys rather than
 silently ignoring typos such as `Conditon`, `NotPrinciple`, or `Actions`.
 It accepts standard top-level `Version`, `Id`, and `Statement` fields and
