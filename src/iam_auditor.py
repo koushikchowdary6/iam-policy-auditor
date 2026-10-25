@@ -134,8 +134,15 @@ def _condition_scopes_public_principal(condition: Any) -> bool:
             }:
                 # A wildcard pattern is not a concrete organization, account,
                 # or network boundary; do not downgrade public access for it.
+                # IAM policy variables (for example
+                # aws:PrincipalAccount == ${aws:PrincipalAccount}) are not
+                # fixed boundaries: self-comparisons can be tautologies.
+                # Do not downgrade a public grant unless every alternative
+                # is a concrete, non-wildcard value.
                 scoped = scoped or all(
-                    isinstance(v, str) and not any(c in v for c in "*?")
+                    isinstance(v, str)
+                    and not any(c in v for c in "*?")
+                    and "${" not in v
                     for v in values
                 )
             elif op in ("arnequals", "arnlike") and context_key == "aws:principalarn":

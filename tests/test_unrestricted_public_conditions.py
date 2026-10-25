@@ -31,6 +31,10 @@ def public_severity(condition):
     {"StringLike": {"aws:PrincipalOrgID": "*"}},
     {"StringLike": {"aws:PrincipalOrgID": "o-*"}},
     {"StringEquals": {"aws:SourceVpc": "*"}},
+    {"StringEquals": {"aws:PrincipalAccount": "${aws:PrincipalAccount}"}},
+    {"StringEquals": {"aws:PrincipalOrgID": "${aws:PrincipalOrgID}"}},
+    {"StringLike": {"aws:SourceVpc": "vpc-${aws:SourceVpc}"}},
+    {"StringEquals": {"aws:SourceVpce": ["vpce-123", "${aws:SourceVpce}"]}},
     {"ArnLike": {"aws:PrincipalArn": "arn:aws:iam::*:role/*"}},
 ])
 def test_unrestricted_conditions_remain_high_risk(condition):
@@ -51,5 +55,16 @@ def test_other_positive_condition_can_still_scope_unrestricted_ip_range():
     condition = {
         "IpAddress": {"aws:SourceIp": "0.0.0.0/0"},
         "StringEquals": {"aws:PrincipalOrgID": "o-abc123xyz"},
+    }
+    assert public_severity(condition) == "MEDIUM"
+
+
+def test_independent_fixed_org_scope_still_restricts_variable_condition():
+    """An additional concrete AND-ed condition still narrows the grant."""
+    condition = {
+        "StringEquals": {
+            "aws:PrincipalAccount": "${aws:PrincipalAccount}",
+            "aws:PrincipalOrgID": "o-abc123xyz",
+        },
     }
     assert public_severity(condition) == "MEDIUM"

@@ -69,6 +69,13 @@ policy shapes, and every bundled example policy. In particular, the
 resource-scoped allow (MEDIUM). The `NotResource` tests also distinguish
 broad-action exclusions (HIGH) from narrow-action exclusions (MEDIUM),
 preventing a resource-wide grant from being mistaken for a clean policy.
+Public-principal severity is downgraded only for recognized positive, concrete
+scoping conditions. A self-referential IAM policy variable such as
+`"aws:PrincipalAccount": "${aws:PrincipalAccount}"` does **not** establish a
+fixed trust boundary; neither it nor a mixed concrete/variable OR-list can
+reduce the public-exposure finding. This is a conservative heuristic, not
+complete IAM condition evaluation.
+
 The ARN-pattern tests distinguish wildcard S3 bucket/account identities from
 legitimate object-prefix wildcards under a named bucket. For IAM role/policy,
 KMS key, and EC2 instance ARNs, wildcards in the identifier after the resource
