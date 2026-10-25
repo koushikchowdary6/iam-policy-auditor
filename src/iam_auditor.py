@@ -29,6 +29,15 @@ PRIV_ESC_ACTIONS = {
 }
 SENSITIVE_SERVICES = {"iam", "kms", "s3", "sts", "secretsmanager", "ec2"}
 
+# IAM policy grammar: a misspelled security-relevant key must not be ignored
+# and accidentally produce a clean audit. These are document keys, not
+# arbitrary metadata fields; reject unknown keys before evaluating findings.
+POLICY_KEYS = {"Version", "Id", "Statement"}
+STATEMENT_KEYS = {
+    "Sid", "Effect", "Principal", "NotPrincipal", "Action", "NotAction",
+    "Resource", "NotResource", "Condition",
+}
+
 
 @dataclass
 class Finding:
@@ -242,6 +251,9 @@ def _privilege_escalation_matches(actions: list[str]) -> list[str]:
 
 
 def audit_statement(stmt: dict[str, Any], index: int) -> list[Finding]:
+    unknown = set(stmt) - STATEMENT_KEYS
+    if unknown:
+        raise ValueError(f"Statement #{index}: unsupported keys: {', '.join(sorted(unknown))}")
     # Reject malformed policy statements instead of silently reporting no risk.
     effect = stmt.get("Effect")
     if effect not in ("Allow", "Deny"):
@@ -384,6 +396,9 @@ def audit_statement(stmt: dict[str, Any], index: int) -> list[Finding]:
 def audit_policy(policy: dict[str, Any]) -> AuditReport:
     if not isinstance(policy, dict):
         raise ValueError("policy must be a JSON object")
+    unknown = set(policy) - POLICY_KEYS
+    if unknown:
+        raise ValueError(f"Policy has unsupported keys: {', '.join(sorted(unknown))}")
     # A missing or empty Statement is not a valid IAM policy. Reporting it as
     # "No risky statements found" could give a false assurance of safety.
     if "Statement" not in policy:
