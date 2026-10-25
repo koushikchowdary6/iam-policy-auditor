@@ -175,10 +175,17 @@ def _is_broad_resource_arn(resource: str) -> bool:
         return False
     if any(char in region or char in account for char in "*?"):
         return True
-    # Preserve legitimate wildcards *within* a named bucket or resource
-    # path while detecting wildcard bucket names and leading selectors.
-    root = identifier.split("/", 1)[0].split(":", 1)[0]
-    return any(char in root for char in "*?")
+    # S3 ARNs identify a bucket before the first slash; wildcard object
+    # prefixes under a fixed bucket are commonly intentional. For IAM roles,
+    # policies, KMS keys and EC2 instances, however, the portion after
+    # "role/", "key/" or "instance/" *is* the resource identity. Ignoring it
+    # would miss role/Admin*, key/* and instance/i-* grants entirely.
+    identity = (
+        identifier.split("/", 1)[0].split(":", 1)[0]
+        if service.lower() == "s3"
+        else identifier
+    )
+    return any(char in identity for char in "*?")
 
 
 def _privilege_escalation_matches(actions: list[str]) -> list[str]:
