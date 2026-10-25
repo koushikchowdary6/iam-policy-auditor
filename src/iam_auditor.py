@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from fnmatch import fnmatchcase
 from ipaddress import collapse_addresses, ip_network
@@ -276,6 +277,15 @@ def audit_statement(stmt: dict[str, Any], index: int) -> list[Finding]:
     for key in ("Action", "NotAction", "Resource", "NotResource"):
         if key in stmt and (not _as_list(stmt[key]) or any(not v.strip() for v in _as_list(stmt[key]))):
             raise ValueError(f"Statement #{index}: {key} must contain non-empty strings")
+
+    # A misspelled action must not silently look like a harmless permission.
+    # IAM actions are either '*' or service:operation glob patterns. Reject
+    # spaces, missing separators, extra colons and control characters.
+    for action_key in ("Action", "NotAction"):
+        if action_key in stmt:
+            for action in _as_list(stmt[action_key]):
+                if action != "*" and not re.fullmatch(r"[A-Za-z0-9*?-]+:[A-Za-z0-9*?-]+", action):
+                    raise ValueError(f"Statement #{index}: {action_key} has invalid action identifier {action!r}")
 
     # Validate conditions even on Deny statements. A malformed Condition
     # must not cause a public grant to be reported as conditionally restricted.
