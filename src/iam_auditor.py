@@ -87,6 +87,30 @@ def _is_public_principal(principal: Any) -> bool:
     return False
 
 
+def _validate_principal(principal: Any, index: int, field_name: str) -> None:
+    """Reject malformed principal shapes instead of reporting a clean policy.
+
+    A principal is a non-empty string/list or a mapping from principal type
+    (AWS, Service, Federated, CanonicalUser) to non-empty strings/lists.
+    Nested mappings, empty alternatives and non-string values are invalid.
+    """
+    def valid_values(value: Any) -> bool:
+        if isinstance(value, str):
+            return bool(value.strip())
+        return (isinstance(value, list) and bool(value)
+                and all(isinstance(item, str) and item.strip() for item in value))
+
+    if isinstance(principal, dict):
+        valid = bool(principal) and all(
+            isinstance(key, str) and key.strip() and valid_values(value)
+            for key, value in principal.items()
+        )
+    else:
+        valid = valid_values(principal)
+    if not valid:
+        raise ValueError(f"Statement #{index}: {field_name} has invalid principal values")
+
+
 def _condition_scopes_public_principal(condition: Any) -> bool:
     """Validate IAM Condition structure and recognize *positive* access scoping.
 
@@ -226,6 +250,9 @@ def audit_statement(stmt: dict[str, Any], index: int) -> list[Finding]:
             raise ValueError(f"Statement #{index}: Principal and NotPrincipal are mutually exclusive")
         if effect != "Deny":
             raise ValueError(f"Statement #{index}: NotPrincipal requires Effect Deny")
+    for principal_field in ("Principal", "NotPrincipal"):
+        if principal_field in stmt:
+            _validate_principal(stmt[principal_field], index, principal_field)
     if ("Action" in stmt) == ("NotAction" in stmt):
         raise ValueError(f"Statement #{index}: exactly one of Action/NotAction is required")
     if ("Resource" in stmt) == ("NotResource" in stmt):
