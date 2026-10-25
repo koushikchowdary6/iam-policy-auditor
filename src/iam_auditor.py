@@ -211,6 +211,14 @@ def audit_statement(stmt: dict[str, Any], index: int) -> list[Finding]:
     effect = stmt.get("Effect")
     if effect not in ("Allow", "Deny"):
         raise ValueError(f"Statement #{index}: Effect must be Allow or Deny")
+    # AWS only supports NotPrincipal with Deny. Ignoring an unsupported
+    # Allow/NotPrincipal statement could otherwise produce a misleading
+    # "No risky statements found" audit result.
+    if "NotPrincipal" in stmt:
+        if "Principal" in stmt:
+            raise ValueError(f"Statement #{index}: Principal and NotPrincipal are mutually exclusive")
+        if effect != "Deny":
+            raise ValueError(f"Statement #{index}: NotPrincipal requires Effect Deny")
     if ("Action" in stmt) == ("NotAction" in stmt):
         raise ValueError(f"Statement #{index}: exactly one of Action/NotAction is required")
     if ("Resource" in stmt) == ("NotResource" in stmt):
