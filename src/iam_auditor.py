@@ -38,6 +38,17 @@ STATEMENT_KEYS = {
     "Sid", "Effect", "Principal", "NotPrincipal", "Action", "NotAction",
     "Resource", "NotResource", "Condition",
 }
+SUPPORTED_POLICY_VERSIONS = {"2008-10-17", "2012-10-17"}
+
+
+def _valid_policy_label(value: Any) -> bool:
+    """Bound reviewer-facing IDs; reject controls and invisible edge padding."""
+    return (
+        isinstance(value, str)
+        and bool(value.strip())
+        and value == value.strip()
+        and not any(ord(char) < 32 or ord(char) == 127 for char in value)
+    )
 
 
 @dataclass
@@ -255,6 +266,9 @@ def audit_statement(stmt: dict[str, Any], index: int) -> list[Finding]:
     unknown = set(stmt) - STATEMENT_KEYS
     if unknown:
         raise ValueError(f"Statement #{index}: unsupported keys: {', '.join(sorted(unknown))}")
+    # Optional statement IDs must be meaningful, not arbitrary JSON values.
+    if "Sid" in stmt and not _valid_policy_label(stmt["Sid"]):
+        raise ValueError(f"Statement #{index}: Sid must be non-empty text without controls")
     # Reject malformed policy statements instead of silently reporting no risk.
     effect = stmt.get("Effect")
     if effect not in ("Allow", "Deny"):
@@ -277,6 +291,17 @@ def audit_statement(stmt: dict[str, Any], index: int) -> list[Finding]:
     for key in ("Action", "NotAction", "Resource", "NotResource"):
         if key in stmt and (not _as_list(stmt[key]) or any(not v.strip() for v in _as_list(stmt[key]))):
             raise ValueError(f"Statement #{index}: {key} must contain non-empty strings")
+
+    # A padded wildcard such as "* " is not an IAM Resource wildcard.
+    # Reject ambiguous/control-bearing resource identifiers before analysis,
+    # rather than returning a false clean result for malformed input.
+    for resource_key in ("Resource", "NotResource"):
+        if resource_key in stmt:
+            for resource in _as_list(stmt[resource_key]):
+                if not _valid_policy_label(resource):
+                    raise ValueError(
+                        f"Statement #{index}: {resource_key} contains an invalid resource identifier"
+                    )
 
     # A misspelled action must not silently look like a harmless permission.
     # IAM actions are either '*' or service:operation glob patterns. Reject
@@ -409,6 +434,13 @@ def audit_policy(policy: dict[str, Any]) -> AuditReport:
     unknown = set(policy) - POLICY_KEYS
     if unknown:
         raise ValueError(f"Policy has unsupported keys: {', '.join(sorted(unknown))}")
+    if "Version" in policy and (
+        not isinstance(policy["Version"], str)
+        or policy["Version"] not in SUPPORTED_POLICY_VERSIONS
+    ):
+        raise ValueError("Version must be 2008-10-17 or 2012-10-17")
+    if "Id" in policy and not _valid_policy_label(policy["Id"]):
+        raise ValueError("Id must be non-empty text without controls")
     # A missing or empty Statement is not a valid IAM policy. Reporting it as
     # "No risky statements found" could give a false assurance of safety.
     if "Statement" not in policy:
