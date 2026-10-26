@@ -39,13 +39,13 @@ def test_omitted_version_remains_compatible_with_iam_documents():
     assert audit_policy(policy).highest_severity == "NONE"
 
 
-@pytest.mark.parametrize("value", ["", " ", " padded", "padded ", "abc\\n", 7, None])
+@pytest.mark.parametrize("value", ["", " ", " padded", "padded ", "abc\n", 7, None])
 def test_invalid_policy_id_is_rejected(value):
     with pytest.raises(ValueError, match="Id"):
         audit_policy(_policy(Id=value))
 
 
-@pytest.mark.parametrize("value", ["", " ", " leading", "trailing ", "ok\\x00bad", 5, None])
+@pytest.mark.parametrize("value", ["", " ", " leading", "trailing ", "ok\x00bad", 5, None])
 def test_invalid_statement_sid_is_rejected(value):
     policy = _policy()
     policy["Statement"][0]["Sid"] = value
@@ -55,8 +55,8 @@ def test_invalid_statement_sid_is_rejected(value):
 
 @pytest.mark.parametrize("field,value", [
     ("Resource", "* "), ("Resource", " *"),
-    ("Resource", "arn:aws:s3:::bucket/*\\n"),
-    ("NotResource", "arn:aws:s3:::bucket/*\\x00"),
+    ("Resource", "arn:aws:s3:::bucket/*\n"),
+    ("NotResource", "arn:aws:s3:::bucket/*\x00"),
     ("NotResource", " arn:aws:s3:::bucket/*"),
 ])
 def test_padded_or_control_bearing_resources_are_rejected(field, value):
