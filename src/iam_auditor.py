@@ -16,6 +16,7 @@ import argparse
 import json
 import re
 import sys
+import unicodedata
 from fnmatch import fnmatchcase
 from ipaddress import collapse_addresses, ip_network
 from dataclasses import dataclass, field
@@ -41,13 +42,29 @@ STATEMENT_KEYS = {
 SUPPORTED_POLICY_VERSIONS = {"2008-10-17", "2012-10-17"}
 
 
+def _unsafe_identifier_character(char: str) -> bool:
+    """Catch invisible, bidi, and non-UTF-8 characters in IAM identifiers.
+
+    C0-only checks miss bidirectional overrides and zero-width format marks,
+    which can make a policy look different to a reviewer than it is to a
+    parser. Preserve ordinary non-ASCII letters and combining accents.
+    """
+    category = unicodedata.category(char)
+    return (
+        category in {"Cc", "Cf", "Cs", "Zl", "Zp"}
+        or char == "\\u034f"  # Combining grapheme joiner
+        or "\\ufe00" <= char <= "\\ufe0f"
+        or "\\U000e0100" <= char <= "\\U000e01ef"
+    )
+
+
 def _valid_policy_label(value: Any) -> bool:
-    """Bound reviewer-facing IDs; reject controls and invisible edge padding."""
+    """Require visible, unpadded reviewer-facing IAM identifiers."""
     return (
         isinstance(value, str)
         and bool(value.strip())
         and value == value.strip()
-        and not any(ord(char) < 32 or ord(char) == 127 for char in value)
+        and not any(_unsafe_identifier_character(char) for char in value)
     )
 
 
@@ -116,10 +133,12 @@ def _validate_principal(principal: Any, index: int, field_name: str) -> None:
     Nested mappings, empty alternatives and non-string values are invalid.
     """
     def valid_values(value: Any) -> bool:
+        # A padded or visually spoofed wildcard is not the public "*" token.
+        # Reject ambiguous principal strings instead of reporting no exposure.
         if isinstance(value, str):
-            return bool(value.strip())
+            return _valid_policy_label(value)
         return (isinstance(value, list) and bool(value)
-                and all(isinstance(item, str) and item.strip() for item in value))
+                and all(_valid_policy_label(item) for item in value))
 
     if isinstance(principal, dict):
         # IAM supports exactly these Principal/NotPrincipal mapping keys.
