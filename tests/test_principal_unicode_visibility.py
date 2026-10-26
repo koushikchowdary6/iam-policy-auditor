@@ -19,15 +19,15 @@ def _policy(**changes):
 
 
 @pytest.mark.parametrize("invisible", [
-    "\\u200b",  # zero-width space
-    "\\u202e",  # right-to-left override
-    "\\u2066",  # bidi isolate
-    "\\u00ad",  # soft hyphen
-    "\\u034f",  # combining grapheme joiner
-    "\\ufe0f",  # variation selector
-    "\\u0085",  # C1 control
-    "\\u2028",  # Unicode line separator
-    "\\ud800",  # unpaired UTF-16 surrogate
+    "\u200b",  # zero-width space
+    "\u202e",  # right-to-left override
+    "\u2066",  # bidi isolate
+    "\u00ad",  # soft hyphen
+    "\u034f",  # combining grapheme joiner
+    "\ufe0f",  # variation selector
+    "\u0085",  # C1 control
+    "\u2028",  # Unicode line separator
+    "\ud800",  # unpaired UTF-16 surrogate
 ])
 def test_invisible_identifiers_fail_closed(invisible):
     for field in ("Id", "Sid", "Resource", "NotResource"):
@@ -44,9 +44,9 @@ def test_invisible_identifiers_fail_closed(invisible):
 
 @pytest.mark.parametrize("principal", [
     "* ", " *", "arn:aws:iam::123456789012:role/reader ",
-    "*\\u200b", "*\\u202e", "*\\u2066",
-    "arn:aws:iam::123456789012:role/read\\u034fer",
-    "arn:aws:iam::123456789012:role/read\\ud800er",
+    "*\u200b", "*\u202e", "*\u2066",
+    "arn:aws:iam::123456789012:role/read\u034fer",
+    "arn:aws:iam::123456789012:role/read\ud800er",
 ])
 @pytest.mark.parametrize("field,effect", [("Principal", "Allow"), ("NotPrincipal", "Deny")])
 def test_ambiguous_principal_values_are_rejected(principal, field, effect):
