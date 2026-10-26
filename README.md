@@ -61,6 +61,13 @@ The build fails if anyone introduces a HIGH-severity permission.
 pip install pytest && python -m pytest tests/ -v
 ```
 
+The auditor validates the optional IAM policy `Version` against the two
+documented language versions (2008-10-17 and 2012-10-17). It also rejects
+empty, non-text, control-bearing, or whitespace-padded policy `Id`,
+statement `Sid`, `Resource`, and `NotResource` strings. This prevents
+malformed input such as `"Resource": "* "` from appearing clean; it does
+not claim to validate the full AWS ARN grammar.
+
 The auditor also validates `Action` and `NotAction` identifiers before
 risk analysis: a selector must be `*` or a `service:operation` glob
 (e.g. `iam:PassR?le`). Misspellings with spaces, missing colons, and
