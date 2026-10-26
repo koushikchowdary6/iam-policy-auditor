@@ -63,10 +63,14 @@ pip install pytest && python -m pytest tests/ -v
 
 The auditor validates the optional IAM policy `Version` against the two
 documented language versions (2008-10-17 and 2012-10-17). It also rejects
-empty, non-text, control-bearing, or whitespace-padded policy `Id`,
-statement `Sid`, `Resource`, and `NotResource` strings. This prevents
-malformed input such as `"Resource": "* "` from appearing clean; it does
-not claim to validate the full AWS ARN grammar.
+empty, non-text, control-bearing, invisible-Unicode, or whitespace-padded
+policy `Id`, statement `Sid`, `Resource`, and `NotResource` strings.
+The same visibility and padding checks apply to `Principal` and
+`NotPrincipal` values, including nested lists. This prevents malformed
+wildcards such as `"Resource": "* "` or `"Principal": "*\\u200b"` from
+appearing clean. Ordinary readable Unicode metadata remains supported.
+These are conservative input checks, **not** full AWS ARN or IAM grammar
+validation.
 
 The auditor also validates `Action` and `NotAction` identifiers before
 risk analysis: a selector must be `*` or a `service:operation` glob
