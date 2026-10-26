@@ -155,6 +155,25 @@ def _validate_principal(principal: Any, index: int, field_name: str) -> None:
         raise ValueError(f"Statement #{index}: {field_name} has invalid principal values")
 
 
+def _concrete_principal_boundary(context_key: str, value: Any) -> bool:
+    """Only recognizable fixed AWS identifiers narrow a public principal.
+
+    A non-wildcard string is not necessarily a real account, organization,
+    VPC, or endpoint boundary. Treat arbitrary values as unproven rather
+    than downgrading a public grant on malformed or self-referential input.
+    This is a conservative shape check, not an AWS resource lookup.
+    """
+    if not isinstance(value, str) or any(c in value for c in "*?") or "${" in value:
+        return False
+    patterns = {
+        "aws:principalaccount": r"[0-9]{12}",
+        "aws:principalorgid": r"o-[A-Za-z0-9]+",
+        "aws:sourcevpc": r"vpc-[A-Fa-f0-9]+",
+        "aws:sourcevpce": r"vpce-[A-Fa-f0-9]+",
+    }
+    return bool(re.fullmatch(patterns[context_key], value))
+
+
 def _condition_scopes_public_principal(condition: Any) -> bool:
     """Validate IAM Condition structure and recognize *positive* access scoping.
 
@@ -208,10 +227,7 @@ def _condition_scopes_public_principal(condition: Any) -> bool:
                 # Do not downgrade a public grant unless every alternative
                 # is a concrete, non-wildcard value.
                 scoped = scoped or all(
-                    isinstance(v, str)
-                    and not any(c in v for c in "*?")
-                    and "${" not in v
-                    for v in values
+                    _concrete_principal_boundary(context_key, v) for v in values
                 )
             elif op in ("arnequals", "arnlike") and context_key == "aws:principalarn":
                 # An ARN may legitimately wildcard role names *within one
