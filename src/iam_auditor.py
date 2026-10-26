@@ -191,6 +191,22 @@ def _fixed_account_principal_arn(value: Any) -> bool:
     ))
 
 
+def _valid_condition_identifier(value: Any) -> bool:
+    """Reject visually deceptive IAM condition operators and context keys.
+
+    Tag context keys may legitimately contain ordinary ASCII spaces, but
+    invisible controls and Unicode lookalike spaces make policy review
+    ambiguous. Reject these before evaluating principal scoping.
+    """
+    return (
+        _valid_policy_label(value)
+        and not any(
+            unicodedata.category(char) == "Zs" and char != " "
+            for char in value
+        )
+    )
+
+
 def _condition_scopes_public_principal(condition: Any) -> bool:
     """Validate IAM Condition structure and recognize *positive* access scoping.
 
@@ -202,12 +218,12 @@ def _condition_scopes_public_principal(condition: Any) -> bool:
         raise ValueError("Condition must be a non-empty object of operators")
     scoped = False
     for operator, entries in condition.items():
-        if not isinstance(operator, str) or not operator.strip():
-            raise ValueError("Condition operators must be non-empty strings")
+        if not _valid_condition_identifier(operator):
+            raise ValueError("Condition operators must be visible, unpadded strings")
         if not isinstance(entries, dict) or not entries:
             raise ValueError(f"Condition {operator}: must contain context keys")
         for key, value in entries.items():
-            if not isinstance(key, str) or not key.strip():
+            if not _valid_condition_identifier(key):
                 raise ValueError(f"Condition {operator}: invalid context key")
             values = value if isinstance(value, list) else [value]
             if not values or any(
