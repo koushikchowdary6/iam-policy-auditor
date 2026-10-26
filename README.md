@@ -72,6 +72,14 @@ appearing clean. Ordinary readable Unicode metadata remains supported.
 These are conservative input checks, **not** full AWS ARN or IAM grammar
 validation.
 
+Condition operator names and context keys also reject hidden Unicode
+controls, deceptive non-ASCII spaces, and edge padding before any public-
+principal scoping decision. This prevents visually misleading conditions
+from being treated as well-formed audit inputs on either Allow or Deny
+statements. Ordinary visible tag names (including ASCII spaces) and
+Unicode tag values remain supported. This is **identifier visibility
+validation**, not a complete IAM Condition grammar or policy simulator.
+
 The auditor also validates `Action` and `NotAction` identifiers before
 risk analysis: a selector must be `*` or a `service:operation` glob
 (e.g. `iam:PassR?le`). Misspellings with spaces, missing colons, and
