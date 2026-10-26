@@ -174,6 +174,23 @@ def _concrete_principal_boundary(context_key: str, value: Any) -> bool:
     return bool(re.fullmatch(patterns[context_key], value))
 
 
+def _fixed_account_principal_arn(value: Any) -> bool:
+    """Recognize an IAM principal ARN scoped to one concrete AWS account.
+
+    A six-part string with a 12-digit fifth field is not necessarily an IAM
+    principal. Reject other services, non-IAM regions, missing resources and
+    malformed role/user paths before reducing public-access severity.
+    This is shape validation, not an AWS identity lookup.
+    """
+    if not isinstance(value, str) or "${" in value:
+        return False
+    return bool(re.fullmatch(
+        r"arn:(?:aws|aws-us-gov|aws-cn):iam::[0-9]{12}:"
+        r"(?:root|(?:role|user)/[A-Za-z0-9+=,.@_*/?-]+)",
+        value,
+    ))
+
+
 def _condition_scopes_public_principal(condition: Any) -> bool:
     """Validate IAM Condition structure and recognize *positive* access scoping.
 
@@ -233,14 +250,7 @@ def _condition_scopes_public_principal(condition: Any) -> bool:
                 # An ARN may legitimately wildcard role names *within one
                 # fixed AWS account*. Requiring a concrete 12-digit account
                 # prevents arn:aws:iam::*:role/* from being treated as scoped.
-                scoped = scoped or all(
-                    isinstance(v, str)
-                    and len(v.split(":", 5)) == 6
-                    and v.split(":", 5)[0] == "arn"
-                    and len(v.split(":", 5)[4]) == 12
-                    and v.split(":", 5)[4].isdigit()
-                    for v in values
-                )
+                scoped = scoped or all(_fixed_account_principal_arn(v) for v in values)
     return scoped
 
 
