@@ -52,9 +52,9 @@ def _unsafe_identifier_character(char: str) -> bool:
     category = unicodedata.category(char)
     return (
         category in {"Cc", "Cf", "Cs", "Zl", "Zp"}
-        or char == "\\u034f"  # Combining grapheme joiner
-        or "\\ufe00" <= char <= "\\ufe0f"
-        or "\\U000e0100" <= char <= "\\U000e01ef"
+        or char == "\u034f"  # Combining grapheme joiner
+        or "\ufe00" <= char <= "\ufe0f"
+        or "\U000e0100" <= char <= "\U000e01ef"
     )
 
 
