@@ -70,7 +70,12 @@ The same visibility and padding checks apply to `Principal` and
 wildcards such as `"Resource": "* "` or `"Principal": "*\\u200b"` from
 appearing clean. Ordinary readable Unicode metadata remains supported.
 These are conservative input checks, **not** full AWS ARN or IAM grammar
-validation.
+validation. The auditor also rejects **partial wildcard patterns in Principal
+and NotPrincipal identifiers**, such as `arn:aws:iam::123456789012:role/Admin*`
+or `*.amazonaws.com`, which IAM does not support as principal identities.
+The standalone `"*"` principal remains valid and is reported as public risk
+when used in an Allow statement. Wildcards in **Resource** and **Action**
+are analyzed separately under their own IAM semantics.
 
 Condition operator names and context keys also reject hidden Unicode
 controls, deceptive non-ASCII spaces, and edge padding before any public-

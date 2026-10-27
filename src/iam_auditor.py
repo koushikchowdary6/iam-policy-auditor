@@ -133,13 +133,20 @@ def _validate_principal(principal: Any, index: int, field_name: str) -> None:
     (AWS, Service, Federated, CanonicalUser) to non-empty strings/lists.
     Nested mappings, empty alternatives and non-string values are invalid.
     """
+    def valid_identifier(value: Any) -> bool:
+        # AWS permits the entire Principal to be "*", but does not support
+        # partial wildcards inside a principal name or ARN. A pattern such as
+        # arn:aws:iam::123456789012:role/Admin* must not look like a concrete
+        # principal and produce a misleading clean audit.
+        return (_valid_policy_label(value)
+                and (value == "*" or not any(char in value for char in "*?")))
+
     def valid_values(value: Any) -> bool:
         # A padded or visually spoofed wildcard is not the public "*" token.
-        # Reject ambiguous principal strings instead of reporting no exposure.
         if isinstance(value, str):
-            return _valid_policy_label(value)
+            return valid_identifier(value)
         return (isinstance(value, list) and bool(value)
-                and all(_valid_policy_label(item) for item in value))
+                and all(valid_identifier(item) for item in value))
 
     if isinstance(principal, dict):
         # IAM supports exactly these Principal/NotPrincipal mapping keys.
