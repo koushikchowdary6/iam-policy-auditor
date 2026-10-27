@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import re
 import sys
 import unicodedata
@@ -228,7 +229,9 @@ def _condition_scopes_public_principal(condition: Any) -> bool:
             values = value if isinstance(value, list) else [value]
             if not values or any(
                 not isinstance(v, (str, int, float, bool))
-                or (isinstance(v, str) and not v.strip()) for v in values
+                or (isinstance(v, str) and not v.strip())
+                or (isinstance(v, float) and not math.isfinite(v))
+                for v in values
             ):
                 raise ValueError(f"Condition {operator}/{key}: invalid values")
             op, context_key = operator.lower(), key.lower()
