@@ -72,3 +72,19 @@ def test_public_grant_without_any_condition_remains_high():
     del policy["Statement"][0]["Condition"]
     report = audit_policy(policy)
     assert next(f.severity for f in report.findings if f.title == "Public principal") == "HIGH"
+
+
+@pytest.mark.parametrize("value", [float("nan"), float("inf"), -float("inf")])
+@pytest.mark.parametrize("effect", ["Allow", "Deny"])
+def test_nonfinite_condition_values_are_rejected_for_both_effects(value, effect):
+    policy = _public_policy({"NumericEquals": {"aws:MultiFactorAuthAge": value}})
+    policy["Statement"][0]["Effect"] = effect
+    with pytest.raises(ValueError, match="Condition"):
+        audit_policy(policy)
+
+
+def test_finite_numeric_condition_values_still_validate():
+    # A valid numeric Condition is not itself a principal restriction.
+    assert _public_severity(
+        {"NumericLessThan": {"aws:MultiFactorAuthAge": 3600.0}}
+    ) == "HIGH"
