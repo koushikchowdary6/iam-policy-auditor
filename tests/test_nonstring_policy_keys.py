@@ -1,8 +1,12 @@
 """Malformed direct-dictionary policy keys must fail with a clear policy error."""
 
+import sys
+from pathlib import Path
+
 import pytest
 
-from src.iam_auditor import audit_policy, audit_statement
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
+from iam_auditor import audit_policy, audit_statement
 
 
 @pytest.mark.parametrize("bad_key", [42, None, (1, 2)])
