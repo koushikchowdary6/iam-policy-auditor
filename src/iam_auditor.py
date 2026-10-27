@@ -327,6 +327,11 @@ def _privilege_escalation_matches(actions: list[str]) -> list[str]:
 
 
 def audit_statement(stmt: dict[str, Any], index: int) -> list[Finding]:
+    # Direct Python callers can supply non-string mapping keys even though
+    # JSON documents cannot. Reject them before sorting unsupported names:
+    # mixed str/int keys otherwise raise TypeError instead of a policy error.
+    if not isinstance(stmt, dict) or any(not isinstance(key, str) for key in stmt):
+        raise ValueError(f"Statement #{index}: keys must be strings")
     unknown = set(stmt) - STATEMENT_KEYS
     if unknown:
         raise ValueError(f"Statement #{index}: unsupported keys: {', '.join(sorted(unknown))}")
@@ -495,6 +500,8 @@ def audit_statement(stmt: dict[str, Any], index: int) -> list[Finding]:
 def audit_policy(policy: dict[str, Any]) -> AuditReport:
     if not isinstance(policy, dict):
         raise ValueError("policy must be a JSON object")
+    if any(not isinstance(key, str) for key in policy):
+        raise ValueError("Policy keys must be strings")
     unknown = set(policy) - POLICY_KEYS
     if unknown:
         raise ValueError(f"Policy has unsupported keys: {', '.join(sorted(unknown))}")
