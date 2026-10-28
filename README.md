@@ -82,8 +82,11 @@ controls, deceptive non-ASCII spaces, and edge padding before any public-
 principal scoping decision. This prevents visually misleading conditions
 from being treated as well-formed audit inputs on either Allow or Deny
 statements. Ordinary visible tag names (including ASCII spaces) and
-Unicode tag values remain supported. This is **identifier visibility
-validation**, not a complete IAM Condition grammar or policy simulator.
+Unicode tag values remain supported. Condition **string values** are also
+checked for invisible-only text, bidirectional controls, invalid surrogates,
+and deceptive non-ASCII whitespace; ordinary ASCII spaces (including within
+or around tag values) remain allowed. This is **input visibility validation**,
+not a complete IAM Condition grammar or policy simulator.
 
 The auditor also validates `Action` and `NotAction` identifiers before
 risk analysis: a selector must be `*` or a `service:operation` glob
