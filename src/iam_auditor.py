@@ -65,6 +65,9 @@ def _valid_policy_label(value: Any) -> bool:
         isinstance(value, str)
         and bool(value.strip())
         and value == value.strip()
+        # A string of combining marks has no independently visible glyph.
+        # Preserve combining accents attached to actual letters, though.
+        and any(not unicodedata.category(char).startswith("M") for char in value)
         and not any(_unsafe_identifier_character(char) for char in value)
     )
 
