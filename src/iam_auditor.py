@@ -268,7 +268,8 @@ def _condition_scopes_public_principal(condition: Any) -> bool:
             ):
                 raise ValueError(f"Condition {operator}/{key}: invalid values")
             op, context_key = operator.lower(), key.lower()
-            if op == "ipaddress" and context_key == "aws:sourceip":
+            if (op in {"ipaddress", "notipaddress", "ipaddressifexists", "notipaddressifexists"}
+                    and context_key == "aws:sourceip"):
                 # Multiple CIDRs are OR-ed by IAM. Two /1 networks can cover
                 # an entire address family even though neither is a /0.
                 # Collapse the union per IP version before treating it as
@@ -292,7 +293,12 @@ def _condition_scopes_public_principal(condition: Any) -> bool:
                     ))
                     for version in (4, 6)
                 )
-                scoped = scoped or restricted
+                # Only a positive, mandatory IpAddress condition can
+                # establish a source-network boundary for a public Allow.
+                # NotIpAddress permits addresses outside the listed ranges;
+                # IfExists also passes when the context key is absent.
+                if op == "ipaddress":
+                    scoped = scoped or restricted
             elif op in ("stringequals", "stringlike") and context_key in {
                 "aws:principalorgid", "aws:principalaccount",
                 "aws:sourcevpc", "aws:sourcevpce",
