@@ -112,7 +112,11 @@ resource-scoped allow (MEDIUM). The `NotResource` tests also distinguish
 broad-action exclusions (HIGH) from narrow-action exclusions (MEDIUM),
 preventing a resource-wide grant from being mistaken for a clean policy.
 Public-principal severity is downgraded only for recognized positive, concrete
-scoping conditions. A self-referential IAM policy variable such as
+scoping conditions. The auditor validates CIDR syntax for `IpAddress`,
+`NotIpAddress`, and their `IfExists` variants on `aws:SourceIp`, including
+Deny statements. Negative and optional conditions never count as a mandatory
+positive network boundary, even when their CIDRs are syntactically valid.
+A self-referential IAM policy variable such as
 `"aws:PrincipalAccount": "${aws:PrincipalAccount}"` does **not** establish a
 fixed trust boundary; neither it nor a mixed concrete/variable OR-list can
 reduce the public-exposure finding. This is a conservative heuristic, not
