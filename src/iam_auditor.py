@@ -273,16 +273,24 @@ def _condition_scopes_public_principal(condition: Any) -> bool:
                 # an entire address family even though neither is a /0.
                 # Collapse the union per IP version before treating it as
                 # a meaningful network restriction.
+                # SourceIp is an IP-address condition, not a numeric or
+                # arbitrary string comparison. Converting an integer with
+                # str() can turn invalid IAM JSON into a plausible /32 and
+                # incorrectly downgrade a public principal's severity.
+                if any(not isinstance(value, str) for value in values):
+                    raise ValueError("Condition IpAddress/aws:SourceIp requires CIDR strings")
                 try:
-                    networks = [ip_network(str(v), strict=False) for v in values]
-                    restricted = all(
-                        all(net.prefixlen > 0 for net in collapse_addresses(
-                            n for n in networks if n.version == version
-                        ))
-                        for version in (4, 6)
-                    )
-                except ValueError:
-                    restricted = False
+                    networks = [ip_network(value, strict=False) for value in values]
+                except ValueError as exc:
+                    # A typo or malformed CIDR must not silently produce a
+                    # reassuring audit result, even on a Deny statement.
+                    raise ValueError("Condition IpAddress/aws:SourceIp has invalid CIDR") from exc
+                restricted = all(
+                    all(net.prefixlen > 0 for net in collapse_addresses(
+                        n for n in networks if n.version == version
+                    ))
+                    for version in (4, 6)
+                )
                 scoped = scoped or restricted
             elif op in ("stringequals", "stringlike") and context_key in {
                 "aws:principalorgid", "aws:principalaccount",
