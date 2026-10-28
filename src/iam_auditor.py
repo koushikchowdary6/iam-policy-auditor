@@ -218,6 +218,29 @@ def _valid_condition_identifier(value: Any) -> bool:
     )
 
 
+def _valid_condition_value(value: Any) -> bool:
+    """Keep IAM Condition string values readable without changing tag semantics.
+
+    Unlike context keys, tag values may legitimately contain ordinary ASCII
+    spaces, including at their edges. Reject hidden format controls, surrogates,
+    deceptive Unicode spaces, and strings made only of combining marks.
+    """
+    if not isinstance(value, str):
+        return True
+    return (
+        bool(value.strip())
+        and any(
+            not char.isspace() and not unicodedata.category(char).startswith("M")
+            for char in value
+        )
+        and not any(
+            _unsafe_identifier_character(char)
+            or (unicodedata.category(char) == "Zs" and char != " ")
+            for char in value
+        )
+    )
+
+
 def _condition_scopes_public_principal(condition: Any) -> bool:
     """Validate IAM Condition structure and recognize *positive* access scoping.
 
@@ -239,7 +262,7 @@ def _condition_scopes_public_principal(condition: Any) -> bool:
             values = value if isinstance(value, list) else [value]
             if not values or any(
                 not isinstance(v, (str, int, float, bool))
-                or (isinstance(v, str) and not v.strip())
+                or not _valid_condition_value(v)
                 or (isinstance(v, float) and not math.isfinite(v))
                 for v in values
             ):
