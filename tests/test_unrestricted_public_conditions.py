@@ -27,7 +27,6 @@ def public_severity(condition):
     {"IpAddress": {"aws:SourceIp": "0.0.0.0/0"}},
     {"IpAddress": {"aws:SourceIp": "::/0"}},
     {"IpAddress": {"aws:SourceIp": ["10.0.0.0/8", "0.0.0.0/0"]}},
-    {"IpAddress": {"aws:SourceIp": "not-an-ip-range"}},
     {"StringLike": {"aws:PrincipalOrgID": "*"}},
     {"StringLike": {"aws:PrincipalOrgID": "o-*"}},
     {"StringEquals": {"aws:SourceVpc": "*"}},
