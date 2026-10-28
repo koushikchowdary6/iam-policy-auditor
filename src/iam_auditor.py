@@ -274,9 +274,10 @@ def _condition_scopes_public_principal(condition: Any) -> bool:
                 # Collapse the union per IP version before treating it as
                 # a meaningful network restriction.
                 # SourceIp is an IP-address condition, not a numeric or
-                # arbitrary string comparison. Converting an integer with
-                # str() can turn invalid IAM JSON into a plausible /32 and
-                # incorrectly downgrade a public principal's severity.
+                # arbitrary string comparison. The IP parser itself accepts
+                # integers as addresses, and the previous str() conversion
+                # silently allowed malformed numeric policy values through
+                # the audit instead of rejecting them.
                 if any(not isinstance(value, str) for value in values):
                     raise ValueError("Condition IpAddress/aws:SourceIp requires CIDR strings")
                 try:
