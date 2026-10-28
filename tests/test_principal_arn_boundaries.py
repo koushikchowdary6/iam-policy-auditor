@@ -53,7 +53,7 @@ def test_control_bearing_principal_arn_is_rejected_before_risk_scoring():
     # Hidden newlines are malformed Condition values, not merely unrecognized
     # principal boundaries. Fail closed rather than returning a HIGH finding.
     with pytest.raises(ValueError, match="Condition"):
-        public_severity("arn:aws:iam::123456789012:role/team\\nInjected")
+        public_severity("arn:aws:iam::123456789012:role/team\nInjected")
 
 
 def test_one_invalid_alternative_prevents_false_downgrade():
