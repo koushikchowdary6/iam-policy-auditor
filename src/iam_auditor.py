@@ -348,11 +348,23 @@ def _is_broad_resource_arn(resource: str) -> bool:
     # policies, KMS keys and EC2 instances, however, the portion after
     # "role/", "key/" or "instance/" *is* the resource identity. Ignoring it
     # would miss role/Admin*, key/* and instance/i-* grants entirely.
-    identity = (
-        identifier.split("/", 1)[0].split(":", 1)[0]
-        if service.lower() == "s3"
-        else identifier
-    )
+    if service.lower() == "s3":
+        if identifier.startswith("accesspoint/"):
+            # S3 access-point ARNs are regional/account-scoped. The name
+            # after "accesspoint/" is the resource identity; treating only
+            # "accesspoint" as the identity misses accesspoint/* grants.
+            # Object paths after a *fixed* access point are narrower.
+            identity = "/".join(identifier.split("/", 2)[:2])
+        elif identifier.startswith("job/"):
+            # S3 Batch Operations job IDs are resource identities, unlike
+            # object prefixes within a named bucket.
+            identity = identifier
+        else:
+            # Ordinary S3 bucket/object ARN: allow wildcard object prefixes
+            # under a fixed bucket, but not wildcard bucket names.
+            identity = identifier.split("/", 1)[0].split(":", 1)[0]
+    else:
+        identity = identifier
     return any(char in identity for char in "*?")
 
 
