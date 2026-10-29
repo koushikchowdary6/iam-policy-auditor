@@ -505,11 +505,11 @@ def audit_statement(stmt: dict[str, Any], index: int) -> list[Finding]:
 
     # Resource '*' is covered above, but wildcard ARN account IDs and
     # resource identities can be just as broad while appearing scoped.
-    # Avoid flagging a wildcard *inside* a named resource's path.
-    if (any(_is_broad_resource_arn(resource) for resource in resources)
-            and ("*" in actions or any(
-                action.split(":", 1)[0] in SENSITIVE_SERVICES for action in actions
-            ))):
+    # A narrow Action is not proof of a narrow Resource: for example,
+    # lambda:InvokeFunction on function:* spans every function in the scope.
+    # Apply this independent of the service sensitivity shortlist, while
+    # avoiding ordinary wildcards inside a named S3 bucket's object path.
+    if any(_is_broad_resource_arn(resource) for resource in resources):
         findings.append(Finding(
             "MEDIUM", "Broad resource ARN pattern",
             "A wildcard in an ARN account, region, or resource identity can "
