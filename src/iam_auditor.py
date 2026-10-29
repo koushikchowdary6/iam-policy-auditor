@@ -445,6 +445,12 @@ def audit_statement(stmt: dict[str, Any], index: int) -> list[Finding]:
     not_actions = [a.lower() for a in _as_list(stmt.get("NotAction"))]
     resources = _as_list(stmt.get("Resource"))
     not_resources = _as_list(stmt.get("NotResource"))
+    # NotAction "*" excludes every action; NotResource "*" excludes every
+    # resource. Either makes this Allow statement grant no permissions, even
+    # when another exclusion or a public Principal is also present. Validate
+    # the entire statement and Condition above before skipping risk findings.
+    if "*" in not_actions or "*" in not_resources:
+        return findings
     # NotResource excludes only named ARNs; a service-wide wildcard still
     # grants every action in that service on all other resources. A global
     # action wildcard is not the only dangerous combination.
