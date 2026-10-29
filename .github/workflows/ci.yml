@@ -17,7 +17,17 @@ jobs:
         run: pip install pytest
       - name: Run tests
         run: python -m pytest tests/ -v
-      - name: Smoke-test the CLI on example policies
+      - name: Smoke-test CLI exit status contract
+        shell: bash
         run: |
-          python src/iam_auditor.py examples/admin_wildcard.json --fail-on HIGH || echo "correctly flagged HIGH"
+          # Exit 1 means the policy was audited and exceeded the severity
+          # threshold. Exit 2 means a parse/runtime error, never success.
+          set +e
+          python src/iam_auditor.py examples/admin_wildcard.json --fail-on HIGH
+          status=$?
+          set -e
+          if [ "$status" -ne 1 ]; then
+            echo "::error::Expected HIGH-risk policy exit 1; got $status"
+            exit 1
+          fi
           python src/iam_auditor.py examples/least_privilege.json --fail-on LOW
