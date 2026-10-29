@@ -44,6 +44,31 @@ SUPPORTED_POLICY_VERSIONS = {"2008-10-17", "2012-10-17"}
 # IAM policy JSON is normally measured in KiB. Bound untrusted file/stdin
 # reads before parsing so an accidental or hostile stream cannot exhaust RAM.
 MAX_POLICY_CHARS = 2_000_000
+MAX_POLICY_JSON_DEPTH = 128
+
+
+def _check_json_nesting(raw: str) -> None:
+    """Bound JSON nesting without mistaking brackets inside strings for syntax."""
+    depth = 0
+    quoted = False
+    escaped = False
+    for char in raw:
+        if quoted:
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == '"':
+                quoted = False
+        elif char == '"':
+            quoted = True
+        elif char in "[{":
+            depth += 1
+            if depth > MAX_POLICY_JSON_DEPTH:
+                raise ValueError(f"policy JSON nesting exceeds {MAX_POLICY_JSON_DEPTH} levels")
+        elif char in "]}":
+            depth -= 1
+
 
 
 def _unsafe_identifier_character(char: str) -> bool:
@@ -635,6 +660,7 @@ def parse_policy_json(raw: str) -> dict[str, Any]:
         raise ValueError("policy JSON input must be text")
     if len(raw) > MAX_POLICY_CHARS:
         raise ValueError(f"policy JSON exceeds {MAX_POLICY_CHARS} characters")
+    _check_json_nesting(raw)
     try:
         return json.loads(
             raw,
