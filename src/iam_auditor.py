@@ -41,6 +41,34 @@ STATEMENT_KEYS = {
     "Resource", "NotResource", "Condition",
 }
 SUPPORTED_POLICY_VERSIONS = {"2008-10-17", "2012-10-17"}
+# IAM policy JSON is normally measured in KiB. Bound untrusted file/stdin
+# reads before parsing so an accidental or hostile stream cannot exhaust RAM.
+MAX_POLICY_CHARS = 2_000_000
+MAX_POLICY_JSON_DEPTH = 128
+
+
+def _check_json_nesting(raw: str) -> None:
+    """Bound JSON nesting without mistaking brackets inside strings for syntax."""
+    depth = 0
+    quoted = False
+    escaped = False
+    for char in raw:
+        if quoted:
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == '"':
+                quoted = False
+        elif char == '"':
+            quoted = True
+        elif char in "[{":
+            depth += 1
+            if depth > MAX_POLICY_JSON_DEPTH:
+                raise ValueError(f"policy JSON nesting exceeds {MAX_POLICY_JSON_DEPTH} levels")
+        elif char in "]}":
+            depth -= 1
+
 
 
 def _unsafe_identifier_character(char: str) -> bool:
@@ -628,11 +656,19 @@ def _reject_nonstandard_json_constant(value: str) -> None:
 
 def parse_policy_json(raw: str) -> dict[str, Any]:
     """Parse strict JSON before performing the IAM policy audit."""
-    return json.loads(
-        raw,
-        object_pairs_hook=_reject_duplicate_json_keys,
-        parse_constant=_reject_nonstandard_json_constant,
-    )
+    if not isinstance(raw, str):
+        raise ValueError("policy JSON input must be text")
+    if len(raw) > MAX_POLICY_CHARS:
+        raise ValueError(f"policy JSON exceeds {MAX_POLICY_CHARS} characters")
+    _check_json_nesting(raw)
+    try:
+        return json.loads(
+            raw,
+            object_pairs_hook=_reject_duplicate_json_keys,
+            parse_constant=_reject_nonstandard_json_constant,
+        )
+    except RecursionError as exc:
+        raise ValueError("policy JSON nesting exceeds parser limit") from exc
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -645,10 +681,10 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         if args.policy_file == "-":
-            raw = sys.stdin.read()
+            raw = sys.stdin.read(MAX_POLICY_CHARS + 1)
         else:
             with open(args.policy_file, encoding="utf-8") as handle:
-                raw = handle.read()
+                raw = handle.read(MAX_POLICY_CHARS + 1)
         policy = parse_policy_json(raw)
         report = audit_policy(policy)
     except (OSError, json.JSONDecodeError, ValueError) as exc:

@@ -11,6 +11,11 @@ It runs **fully offline**: it analyzes the policy document you give it, so it
 needs no AWS credentials and never touches a live account. That makes it safe
 to drop into CI as a guardrail on policy changes.
 
+For untrusted inputs, file and stdin reads are bounded to **2,000,000
+characters**. Oversized or excessively nested JSON is rejected with audit-error
+exit code `2`, not reported as a clean policy. This is a resource-safety guard,
+not an AWS policy-size validator or authorization simulator.
+
 ## What it flags
 
 | Check | Severity | Why it matters |
