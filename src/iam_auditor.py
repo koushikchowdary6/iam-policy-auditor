@@ -502,6 +502,16 @@ def audit_statement(stmt: dict[str, Any], index: int) -> list[Finding]:
                     f"Resource '*' used with sensitive service(s) "
                     f"{sorted(services & SENSITIVE_SERVICES)}. Restrict to specific ARNs.",
                     index))
+            elif actions:
+                # A narrow action is not a narrow resource boundary. The
+                # sensitive-service shortlist previously missed global grants
+                # such as lambda:InvokeFunction or sqs:SendMessage on '*'.
+                # Do not duplicate the dedicated full-admin/NotAction findings.
+                findings.append(Finding(
+                    "MEDIUM", "Wildcard resource across services",
+                    "Resource '*' allows the listed actions on every matching "
+                    "resource, including services outside the sensitive-service "
+                    "shortlist. Prefer explicit resource ARNs.", index))
 
     # Resource '*' is covered above, but wildcard ARN account IDs and
     # resource identities can be just as broad while appearing scoped.
