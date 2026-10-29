@@ -94,3 +94,23 @@ def test_deny_wildcard_arn_does_not_generate_allow_risk():
         }]
     })
     assert report.findings == []
+
+
+@pytest.mark.parametrize("action, resource", [
+    ("s3:GetObject", "arn:aws:s3:us-east-1:123456789012:accesspoint/*"),
+    ("s3:GetObject", "arn:aws:s3:us-east-1:123456789012:accesspoint/team-*"),
+    ("s3:GetObject", "arn:aws:s3:us-east-1:123456789012:accesspoint/ap-?"),
+    ("s3:DescribeJob", "arn:aws:s3:us-east-1:123456789012:job/*"),
+])
+def test_wildcard_s3_access_point_or_batch_job_identity_is_flagged(action, resource):
+    assert _titles(action, resource)["Broad resource ARN pattern"] == "MEDIUM"
+
+
+@pytest.mark.parametrize("action, resource", [
+    ("s3:GetObject", "arn:aws:s3:us-east-1:123456789012:accesspoint/team-data"),
+    ("s3:GetObject", "arn:aws:s3:us-east-1:123456789012:accesspoint/team-data/object/2026/*"),
+    ("s3:GetObject", "arn:aws:s3:::reports-bucket/2026/*"),
+    ("s3:DescribeJob", "arn:aws:s3:us-east-1:123456789012:job/abc123"),
+])
+def test_named_s3_resource_with_scoped_object_prefix_remains_clean(action, resource):
+    assert _titles(action, resource) == {}
