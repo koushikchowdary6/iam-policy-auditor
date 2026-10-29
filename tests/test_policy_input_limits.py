@@ -51,3 +51,11 @@ def test_small_valid_policy_remains_supported():
     assert parse_policy_json('{"Statement":{"Effect":"Deny","Action":"s3:*","Resource":"*"}}')[
         "Statement"
     ]["Effect"] == "Deny"
+
+
+def test_json_depth_guard_ignores_brackets_inside_quoted_strings():
+    import json
+
+    label = "[" * 200 + "\\\"{" * 50
+    policy = {"Id": label, "Statement": {"Effect": "Deny", "Action": "s3:*", "Resource": "*"}}
+    assert parse_policy_json(json.dumps(policy))["Id"] == label
