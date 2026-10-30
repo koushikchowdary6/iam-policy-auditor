@@ -28,6 +28,11 @@ PRIV_ESC_ACTIONS = {
     "iam:attachrolepolicy", "iam:attachgrouppolicy", "iam:putuserpolicy",
     "iam:putrolepolicy", "iam:creategrouppolicy", "iam:createaccesskey",
     "iam:createloginprofile", "iam:updateloginprofile", "iam:passrole",
+    # Trust-policy edits, group membership/policy changes, and removal of
+    # permissions boundaries are common escalation building blocks when
+    # paired with an attacker-controlled principal or privileged target.
+    "iam:updateassumerolepolicy", "iam:addusertogroup", "iam:putgrouppolicy",
+    "iam:deleteuserpermissionsboundary", "iam:deleterolepermissionsboundary",
     "sts:assumerole",
 }
 SENSITIVE_SERVICES = {"iam", "kms", "s3", "sts", "secretsmanager", "ec2"}
