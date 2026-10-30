@@ -33,6 +33,9 @@ PRIV_ESC_ACTIONS = {
     # paired with an attacker-controlled principal or privileged target.
     "iam:updateassumerolepolicy", "iam:addusertogroup", "iam:putgrouppolicy",
     "iam:deleteuserpermissionsboundary", "iam:deleterolepermissionsboundary",
+    # Replacing a restrictive boundary with a more permissive one can also
+    # enable escalation when the caller controls the replacement policy.
+    "iam:putuserpermissionsboundary", "iam:putrolepermissionsboundary",
     "sts:assumerole",
 }
 SENSITIVE_SERVICES = {"iam", "kms", "s3", "sts", "secretsmanager", "ec2"}
