@@ -25,7 +25,7 @@ not an AWS policy-size validator or authorization simulator.
 | `Allow` + `NotResource` with `Action: "*"` or `s3:*` (or `NotAction`) | HIGH | Excluding selected resources does not restrict broad actions on all other resources |
 | `Allow` + `NotResource` with a narrow action (`s3:GetObject`) | MEDIUM | Still grants that action on **all resources except** the exclusions; not an allow-list |
 | Scoped `Allow` + `NotAction` | MEDIUM | Still broader and harder to reason about than an explicit action allow-list |
-| Privilege-escalation actions (e.g. `iam:CreatePolicyVersion`, `iam:PassRole`, `sts:AssumeRole`) | HIGH | Lets a principal grant itself more access |
+| Potential privilege-escalation actions (e.g. `iam:UpdateAssumeRolePolicy`, `iam:AddUserToGroup`, `iam:PutGroupPolicy`, `iam:DeleteRolePermissionsBoundary`, `iam:PassRole`) | HIGH | Can help an attacker change trust, group permissions or boundary controls when combined with other access |
 | `Principal: "*"` with no condition | HIGH | Resource exposed to every account / anonymous |
 | Wildcard action (`s3:*`) | MEDIUM | Silently grants future/dangerous actions |
 | Wildcard resource on a sensitive service (iam, kms, s3, sts…) | MEDIUM | Over-broad blast radius |
@@ -137,10 +137,19 @@ warnings, not a full IAM policy evaluation.
 ## Scope & honesty
 
 The privilege-escalation action list is a curated starting set drawn from
-widely documented escalation paths — it is **not** exhaustive, and a clean
-result is not a guarantee of a safe policy. This is a first-pass linter to
-catch common mistakes, not a replacement for a full access review or tools
-like AWS IAM Access Analyzer.
+widely documented escalation paths. It now includes trust-policy changes
+(`iam:UpdateAssumeRolePolicy`), group membership and inline group-policy
+changes (`iam:AddUserToGroup`, `iam:PutGroupPolicy`), and removal of user/role
+permissions boundaries. Exact names, case-insensitive IAM action patterns,
+and wildcard grants are checked; explicit `Deny` statements do not count as
+grants. Regression tests cover each path and read-only negative controls.
+
+These actions are **potential escalation building blocks**, not proof that
+the principal can successfully escalate: actual risk depends on the target
+identity, existing grants, SCPs, boundaries, trust policies and account state.
+The list is **not exhaustive**, and a clean result is not a guarantee of a
+safe policy. This is a first-pass linter, not a replacement for a full access
+review or tools like AWS IAM Access Analyzer.
 
 ## Author
 
