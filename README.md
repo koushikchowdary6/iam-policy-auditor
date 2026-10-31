@@ -16,6 +16,12 @@ characters**. Oversized or excessively nested JSON is rejected with audit-error
 exit code `2`, not reported as a clean policy. This is a resource-safety guard,
 not an AWS policy-size validator or authorization simulator.
 
+For file paths, the CLI opens only regular files and rejects symbolic links,
+FIFOs and device files instead of following or blocking on them. It also
+reports invalid UTF-8 as an audit error (exit `2`). Standard input (`-`)
+remains available for intentional streams. The no-follow open flag is enforced
+on platforms that provide it (including Linux CI).
+
 ## What it flags
 
 | Check | Severity | Why it matters |
