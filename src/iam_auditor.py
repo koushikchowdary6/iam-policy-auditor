@@ -21,6 +21,7 @@ import stat
 import sys
 import unicodedata
 from fnmatch import fnmatchcase
+from urllib.parse import quote
 from ipaddress import collapse_addresses, ip_network
 from dataclasses import dataclass, field
 from typing import Any
@@ -661,7 +662,7 @@ def report_sarif(report: AuditReport, policy_file: str) -> dict[str, Any]:
     if policy_file != "-":
         relative = os.path.relpath(os.path.abspath(policy_file), os.getcwd())
         if relative != ".." and not relative.startswith(".." + os.sep):
-            location_uri = relative.replace(os.sep, "/")
+            location_uri = quote(relative.replace(os.sep, "/"), safe="/-._~")
     for finding in report.findings:
         rule_id = "IAM-" + re.sub(r"[^A-Za-z0-9]+", "-", finding.title).strip("-").upper()
         rules[rule_id] = {
@@ -678,7 +679,7 @@ def report_sarif(report: AuditReport, policy_file: str) -> dict[str, Any]:
         }
         if location_uri is not None:
             location["physicalLocation"] = {
-                "artifactLocation": {"uri": location_uri, "uriBaseId": "%SRCROOT%"},
+                "artifactLocation": {"uri": location_uri},
             }
         results.append({
             "ruleId": rule_id,
