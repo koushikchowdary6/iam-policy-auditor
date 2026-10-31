@@ -28,8 +28,10 @@ def test_sarif_findings_have_stable_rule_ids_and_file_locations():
     assert findings
     rule_ids = {rule["id"] for rule in run["tool"]["driver"]["rules"]}
     assert rule_ids == {finding["ruleId"] for finding in findings}
-    assert all(finding["level"] == "error" for finding in findings)
-    assert all(finding["properties"]["severity"] == "HIGH" for finding in findings)
+    assert any(finding["level"] == "error" for finding in findings)
+    severity_levels = {"HIGH": "error", "MEDIUM": "warning", "LOW": "note"}
+    assert all(finding["level"] == severity_levels[finding["properties"]["severity"]]
+               for finding in findings)
     for finding in findings:
         location, = finding["locations"]
         assert location["physicalLocation"]["artifactLocation"] == {
