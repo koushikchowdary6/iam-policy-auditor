@@ -15,7 +15,9 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import os
 import re
+import stat
 import sys
 import unicodedata
 from fnmatch import fnmatchcase
@@ -679,6 +681,28 @@ def parse_policy_json(raw: str) -> dict[str, Any]:
         raise ValueError("policy JSON nesting exceeds parser limit") from exc
 
 
+def _read_policy_file(path: str) -> str:
+    """Read bounded policy input from a regular file, not a link or device.
+
+    Open with O_NOFOLLOW (where supported) and O_NONBLOCK so symlinks and
+    FIFOs cannot redirect or indefinitely stall a CI audit. Validate the
+    opened descriptor, rather than a race-prone pre-open stat result.
+    """
+    if not hasattr(os, "O_NOFOLLOW") and os.path.islink(path):
+        raise ValueError("policy path must not be a symbolic link")
+    flags = os.O_RDONLY | getattr(os, "O_NONBLOCK", 0) | getattr(os, "O_NOFOLLOW", 0)
+    fd = os.open(path, flags)
+    try:
+        if not stat.S_ISREG(os.fstat(fd).st_mode):
+            raise ValueError("policy path must be a regular file")
+        with os.fdopen(fd, "r", encoding="utf-8") as handle:
+            fd = -1  # fdopen now owns and closes the descriptor
+            return handle.read(MAX_POLICY_CHARS + 1)
+    finally:
+        if fd >= 0:
+            os.close(fd)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Audit an AWS IAM policy JSON for risky permissions")
     parser.add_argument("policy_file", help="path to a policy JSON file, or '-' for stdin")
@@ -691,11 +715,10 @@ def main(argv: list[str] | None = None) -> int:
         if args.policy_file == "-":
             raw = sys.stdin.read(MAX_POLICY_CHARS + 1)
         else:
-            with open(args.policy_file, encoding="utf-8") as handle:
-                raw = handle.read(MAX_POLICY_CHARS + 1)
+            raw = _read_policy_file(args.policy_file)
         policy = parse_policy_json(raw)
         report = audit_policy(policy)
-    except (OSError, json.JSONDecodeError, ValueError) as exc:
+    except (OSError, UnicodeError, json.JSONDecodeError, ValueError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
 
