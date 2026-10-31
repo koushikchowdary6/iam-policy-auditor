@@ -21,6 +21,7 @@ import stat
 import sys
 import unicodedata
 from fnmatch import fnmatchcase
+from urllib.parse import quote
 from ipaddress import collapse_addresses, ip_network
 from dataclasses import dataclass, field
 from typing import Any
@@ -644,6 +645,66 @@ def audit_policy(policy: dict[str, Any]) -> AuditReport:
     return report
 
 
+
+def report_sarif(report: AuditReport, policy_file: str) -> dict[str, Any]:
+    """Serialize policy findings as SARIF 2.1.0 with stable rule identifiers.
+
+    Statement indices are logical locations, not guessed source line numbers.
+    File locations allow CI tools to associate findings with the input policy;
+    stdin has no physical file location. This does not simulate IAM grants.
+    """
+    rules: dict[str, dict[str, Any]] = {}
+    results: list[dict[str, Any]] = []
+    levels = {"HIGH": "error", "MEDIUM": "warning", "LOW": "note"}
+    # Keep a relative path for SARIF consumers that run from a checkout.
+    # An input outside the working tree has no trustworthy repository path.
+    location_uri = None
+    if policy_file != "-":
+        relative = os.path.relpath(os.path.abspath(policy_file), os.getcwd())
+        if relative != ".." and not relative.startswith(".." + os.sep):
+            location_uri = quote(relative.replace(os.sep, "/"), safe="/-._~")
+    for finding in report.findings:
+        rule_id = "IAM-" + re.sub(r"[^A-Za-z0-9]+", "-", finding.title).strip("-").upper()
+        rules[rule_id] = {
+            "id": rule_id,
+            "shortDescription": {"text": finding.title},
+            "properties": {"tags": ["security", "aws", "iam"]},
+        }
+        location: dict[str, Any] = {
+            "logicalLocations": [{
+                "name": f"Statement[{finding.statement_index}]",
+                "fullyQualifiedName": f"Statement[{finding.statement_index}]",
+                "kind": "member",
+            }],
+        }
+        if location_uri is not None:
+            location["physicalLocation"] = {
+                "artifactLocation": {"uri": location_uri},
+            }
+        results.append({
+            "ruleId": rule_id,
+            "level": levels[finding.severity],
+            "message": {"text": finding.detail},
+            "locations": [location],
+            "properties": {
+                "severity": finding.severity,
+                "statement_index": finding.statement_index,
+            },
+        })
+    return {
+        "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
+        "version": "2.1.0",
+        "runs": [{
+            "tool": {"driver": {
+                "name": "IAM Policy Auditor",
+                "informationUri": "https://github.com/koushikchowdary6/iam-policy-auditor",
+                "rules": [rules[key] for key in sorted(rules)],
+            }},
+            "results": results,
+        }],
+    }
+
+
 def _reject_duplicate_json_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     """Reject ambiguous policy JSON instead of silently accepting last-key-wins.
 
@@ -706,7 +767,9 @@ def _read_policy_file(path: str) -> str:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Audit an AWS IAM policy JSON for risky permissions")
     parser.add_argument("policy_file", help="path to a policy JSON file, or '-' for stdin")
-    parser.add_argument("--json", action="store_true", help="emit findings as JSON")
+    formats = parser.add_mutually_exclusive_group()
+    formats.add_argument("--json", action="store_true", help="emit findings as JSON")
+    formats.add_argument("--sarif", action="store_true", help="emit SARIF 2.1.0 for CI tools")
     parser.add_argument("--fail-on", choices=["HIGH", "MEDIUM", "LOW"], default=None,
                         help="exit non-zero if any finding at/above this severity exists")
     args = parser.parse_args(argv)
@@ -722,7 +785,9 @@ def main(argv: list[str] | None = None) -> int:
         print(f"error: {exc}", file=sys.stderr)
         return 2
 
-    if args.json:
+    if args.sarif:
+        print(json.dumps(report_sarif(report, args.policy_file), indent=2))
+    elif args.json:
         print(json.dumps({"highest_severity": report.highest_severity,
                           "counts": report.counts(),
                           "findings": [f.to_dict() for f in report.findings]}, indent=2))

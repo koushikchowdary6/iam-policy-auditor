@@ -66,6 +66,27 @@ IAM Policy Audit — 1 HIGH, 0 MEDIUM, 0 LOW
 
 The build fails if anyone introduces a HIGH-severity permission.
 
+## SARIF output for review and CI
+
+Export SARIF 2.1.0 with stable rule IDs, severity levels (HIGH → error,
+MEDIUM → warning, LOW → note), and logical `Statement[index]` locations:
+
+```bash
+python src/iam_auditor.py examples/admin_wildcard.json --sarif > iam-findings.sarif
+python src/iam_auditor.py examples/admin_wildcard.json --sarif --fail-on HIGH > iam-findings.sarif
+# The second command writes valid SARIF but returns 1 because HIGH findings exist.
+```
+
+For files inside the current working tree, results identify the relative policy
+path; stdin or files outside that tree retain logical statement locations
+without inventing source file paths. Source line numbers are **not guessed**:
+the auditor does not preserve JSON token offsets. SARIF is suitable for
+machine-readable security review; GitHub code-scanning upload and inline
+annotations are **not claimed to be verified**. Existing exit codes remain:
+0 for a successful audit below the chosen threshold, 1 for findings at or above
+`--fail-on`, and 2 for invalid input or an audit error. `--json` and
+`--sarif` are mutually exclusive.
+
 ## Regression coverage
 
 ```bash
