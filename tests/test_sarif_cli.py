@@ -35,7 +35,7 @@ def test_sarif_findings_have_stable_rule_ids_and_file_locations():
     for finding in findings:
         location, = finding["locations"]
         assert location["physicalLocation"]["artifactLocation"] == {
-            "uri": "examples/admin_wildcard.json", "uriBaseId": "%SRCROOT%"
+            "uri": "examples/admin_wildcard.json"
         }
         assert location["logicalLocations"][0]["fullyQualifiedName"].startswith("Statement[")
         assert finding["properties"]["statement_index"] >= 0
@@ -67,6 +67,25 @@ def test_outside_checkout_sarif_does_not_claim_repo_path(tmp_path):
     findings = json.loads(result.stdout)["runs"][0]["results"]
     assert findings
     assert all("physicalLocation" not in finding["locations"][0] for finding in findings)
+
+
+
+def test_relative_sarif_uri_percent_encodes_spaces(tmp_path):
+    source = (ROOT / "examples" / "admin_wildcard.json").read_text(encoding="utf-8")
+    nested = tmp_path / "policy with spaces.json"
+    nested.write_text(source, encoding="utf-8")
+    result = subprocess.run(
+        [sys.executable, str(CLI), nested.name, "--sarif"],
+        capture_output=True, text=True, check=False, cwd=tmp_path,
+    )
+    assert result.returncode == 0, result.stderr
+    findings = json.loads(result.stdout)["runs"][0]["results"]
+    assert findings
+    assert all(
+        finding["locations"][0]["physicalLocation"]["artifactLocation"]["uri"]
+        == "policy%20with%20spaces.json"
+        for finding in findings
+    )
 
 
 def test_invalid_policy_produces_no_misleading_sarif(tmp_path):
