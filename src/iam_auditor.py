@@ -485,8 +485,27 @@ def audit_statement(stmt: dict[str, Any], index: int) -> list[Finding]:
                     and re.fullmatch(r"[a-z0-9-]+", parts[2]) is not None
                     and bool(parts[5])
                 )
+                # IAM is a global service: its resource ARNs have no region,
+                # require an account selector, and identify a resource by
+                # type/name (except root or the wildcard '*'). A syntactically
+                # six-field ARN ending in 'role/' is not a usable boundary.
+                # Preserve account wildcards, which are valid IAM patterns
+                # and separately reported as broad resource exposure.
+                valid_iam_shape = True
+                if valid_arn_shape and parts[2] == "iam":
+                    identity = parts[5]
+                    valid_iam_shape = (
+                        not parts[3]
+                        and re.fullmatch(r"[0-9*?]{1,12}", parts[4]) is not None
+                        and (identity in {"root", "*"} or (
+                            "/" in identity
+                            and re.fullmatch(r"[a-z0-9-]+", identity.split("/", 1)[0]) is not None
+                            and bool(identity.split("/", 1)[1])
+                            and not identity.endswith("/")
+                        ))
+                    )
                 if not _valid_policy_label(resource) or (
-                    resource != "*" and not valid_arn_shape
+                    resource != "*" and (not valid_arn_shape or not valid_iam_shape)
                 ):
                     raise ValueError(
                         f"Statement #{index}: {resource_key} contains an invalid resource identifier"

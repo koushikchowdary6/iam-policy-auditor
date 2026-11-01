@@ -49,6 +49,20 @@ appropriate. This is a configuration hazard, **not** an additional Allow
 permission, and the auditor cannot determine which identities have boundaries
 or simulate effective access. See [AWS NotPrincipal guidance](https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_elements_notprincipal.html).
 
+## IAM ARN boundary validation
+
+The auditor rejects malformed IAM resource identities before assigning a
+risk rating. For example, `arn:aws:iam::123456789012:role/` lacks a role name;
+`arn:aws:iam:us-east-1:123456789012:role/Admin` incorrectly supplies a region
+for the global IAM service. Neither is evidence of least privilege. The same
+validation applies to `Resource` and `NotResource`, including `Deny` statements.
+
+Valid account-scoped role paths, root ARNs and wildcard patterns still parse.
+For example, `arn:aws:iam::*:role/Admin` is accepted as a wildcard pattern
+**and flagged as broad** rather than mistaken for a narrowly scoped grant.
+This is structural validation, not a complete AWS ARN grammar or a live
+authorization check.
+
 ## Usage
 
 ```bash
