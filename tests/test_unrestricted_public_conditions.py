@@ -43,7 +43,7 @@ def test_unrestricted_conditions_remain_high_risk(condition):
 @pytest.mark.parametrize("condition", [
     {"IpAddress": {"aws:SourceIp": "10.0.0.0/8"}},
     {"IpAddress": {"aws:SourceIp": ["10.0.0.0/8", "192.168.0.0/16"]}},
-    {"StringEquals": {"aws:PrincipalOrgID": "o-abc123xyz"}},
+    {"StringEquals": {"aws:PrincipalOrgID": "o-abc123xyz0"}},
     {"ArnEquals": {"aws:PrincipalArn": "arn:aws:iam::123456789012:role/trusted"}},
 ])
 def test_concrete_positive_scopes_remain_medium_risk(condition):
@@ -53,7 +53,7 @@ def test_concrete_positive_scopes_remain_medium_risk(condition):
 def test_other_positive_condition_can_still_scope_unrestricted_ip_range():
     condition = {
         "IpAddress": {"aws:SourceIp": "0.0.0.0/0"},
-        "StringEquals": {"aws:PrincipalOrgID": "o-abc123xyz"},
+        "StringEquals": {"aws:PrincipalOrgID": "o-abc123xyz0"},
     }
     assert public_severity(condition) == "MEDIUM"
 
@@ -63,7 +63,7 @@ def test_independent_fixed_org_scope_still_restricts_variable_condition():
     condition = {
         "StringEquals": {
             "aws:PrincipalAccount": "${aws:PrincipalAccount}",
-            "aws:PrincipalOrgID": "o-abc123xyz",
+            "aws:PrincipalOrgID": "o-abc123xyz0",
         },
     }
     assert public_severity(condition) == "MEDIUM"

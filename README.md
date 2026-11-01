@@ -151,8 +151,16 @@ positive network boundary, even when their CIDRs are syntactically valid.
 A self-referential IAM policy variable such as
 `"aws:PrincipalAccount": "${aws:PrincipalAccount}"` does **not** establish a
 fixed trust boundary; neither it nor a mixed concrete/variable OR-list can
-reduce the public-exposure finding. This is a conservative heuristic, not
-complete IAM condition evaluation.
+reduce the public-exposure finding. The concrete-ID downgrade check now
+requires a 12-digit account, an AWS Organizations ID with 10–32 lowercase
+alphanumeric characters after `o-`, or a VPC/VPC endpoint ID with 8 or 17
+hexadecimal digits. Short placeholders such as `o-example` and `vpc-1`
+remain **HIGH** instead of being treated as trustworthy network/account
+boundaries. These are format checks, not proof that the ID exists, that
+the service supports the condition key, or that the policy is safe.
+See [AWS Organizations ID format](https://docs.aws.amazon.com/organizations/latest/APIReference/API_Organization.html)
+and [EC2/VPC CLI examples](https://docs.aws.amazon.com/cli/latest/userguide/cli_ec2_code_examples.html).
+This is a conservative heuristic, not complete IAM condition evaluation.
 
 The ARN-pattern tests distinguish wildcard S3 bucket/account identities from
 legitimate object-prefix wildcards under a named bucket. For IAM role/policy,
