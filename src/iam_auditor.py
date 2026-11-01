@@ -215,11 +215,16 @@ def _concrete_principal_boundary(context_key: str, value: Any) -> bool:
     """
     if not isinstance(value, str) or any(c in value for c in "*?") or "${" in value:
         return False
+    # These are *downgrade* criteria, not general IAM condition validators.
+    # A merely plausible prefix (e.g. "o-x" or "vpc-1") is not evidence
+    # that Principal "*" is meaningfully scoped. Match documented AWS ID
+    # shapes before lowering public-access severity. Legacy EC2 identifiers
+    # use eight hex digits; newer ones use seventeen.
     patterns = {
         "aws:principalaccount": r"[0-9]{12}",
-        "aws:principalorgid": r"o-[A-Za-z0-9]+",
-        "aws:sourcevpc": r"vpc-[A-Fa-f0-9]+",
-        "aws:sourcevpce": r"vpce-[A-Fa-f0-9]+",
+        "aws:principalorgid": r"o-[a-z0-9]{10,32}",
+        "aws:sourcevpc": r"vpc-(?:[a-f0-9]{8}|[a-f0-9]{17})",
+        "aws:sourcevpce": r"vpce-(?:[a-f0-9]{8}|[a-f0-9]{17})",
     }
     return bool(re.fullmatch(patterns[context_key], value))
 
