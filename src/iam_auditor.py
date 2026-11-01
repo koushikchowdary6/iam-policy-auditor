@@ -471,7 +471,23 @@ def audit_statement(stmt: dict[str, Any], index: int) -> list[Finding]:
     for resource_key in ("Resource", "NotResource"):
         if resource_key in stmt:
             for resource in _as_list(stmt[resource_key]):
-                if not _valid_policy_label(resource):
+                # AWS Resource/NotResource entries must be '*' or an ARN.
+                # A bare name or incomplete ARN is not a narrow resource
+                # boundary; accepting it as a clean audit is misleading.
+                # Preserve service-specific resource suffixes and S3's empty
+                # region/account fields without pretending to validate every
+                # service's ARN grammar.
+                parts = resource.split(":", 5)
+                valid_arn_shape = (
+                    len(parts) == 6
+                    and parts[0] == "arn"
+                    and re.fullmatch(r"[a-z0-9-]+", parts[1]) is not None
+                    and re.fullmatch(r"[a-z0-9-]+", parts[2]) is not None
+                    and bool(parts[5])
+                )
+                if not _valid_policy_label(resource) or (
+                    resource != "*" and not valid_arn_shape
+                ):
                     raise ValueError(
                         f"Statement #{index}: {resource_key} contains an invalid resource identifier"
                     )
