@@ -33,10 +33,21 @@ on platforms that provide it (including Linux CI).
 | Scoped `Allow` + `NotAction` | MEDIUM | Still broader and harder to reason about than an explicit action allow-list |
 | Potential privilege-escalation actions (e.g. `iam:UpdateAssumeRolePolicy`, `iam:AddUserToGroup`, `iam:PutGroupPolicy`, `iam:DeleteRolePermissionsBoundary`, `iam:PutRolePermissionsBoundary`, `iam:PassRole`) | HIGH | Can help an attacker change trust, group permissions or boundary controls when combined with other access |
 | `Principal: "*"` with no condition | HIGH | Resource exposed to every account / anonymous |
+| `Deny` with `NotPrincipal` | MEDIUM | AWS documents an unexpected deny for IAM users/roles with permissions boundaries, even when named as exceptions |
 | Wildcard action (`s3:*`) | MEDIUM | Silently grants future/dangerous actions |
 | Wildcard resource on a sensitive service (iam, kms, s3, sts…) | MEDIUM | Over-broad blast radius |
 | Wildcard account/region or resource identity in a sensitive-service ARN (for example `arn:aws:s3:::*`) | MEDIUM | An ARN can look scoped while matching unrelated buckets, accounts, or regions |
 | Wildcard action with no `Condition` | LOW | Missing defense-in-depth (MFA, source IP, tags) |
+
+
+**Resource-policy deny caveat:** Unlike ordinary `Deny` statements, a
+`Deny` with `NotPrincipal` produces a MEDIUM warning. AWS documents that
+this combination can unexpectedly deny IAM principals with permissions
+boundaries even when those principals are listed as exceptions. AWS recommends
+using `Principal: "*"` with `ArnNotEquals` on `aws:PrincipalArn` where
+appropriate. This is a configuration hazard, **not** an additional Allow
+permission, and the auditor cannot determine which identities have boundaries
+or simulate effective access. See [AWS NotPrincipal guidance](https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_elements_notprincipal.html).
 
 ## Usage
 
