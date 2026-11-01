@@ -54,7 +54,7 @@ def test_positive_sourceip_remains_a_scoping_signal():
 def test_independent_concrete_org_condition_still_scopes_negative_sourceip():
     report = audit_policy(_policy(
         "NotIpAddress", "10.0.0.0/8",
-        extra_condition={"StringEquals": {"aws:PrincipalOrgID": "o-example"}},
+        extra_condition={"StringEquals": {"aws:PrincipalOrgID": "o-example123"}},
     ))
     public = [f for f in report.findings if f.title == "Public principal"]
     assert len(public) == 1
