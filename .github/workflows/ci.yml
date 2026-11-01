@@ -5,14 +5,21 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      matrix:
+        python-version: ['3.10', '3.12']
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: ${{ matrix.python-version }}
       - name: Install pytest
         run: pip install pytest
       - name: Run tests
@@ -31,3 +38,30 @@ jobs:
             exit 1
           fi
           python src/iam_auditor.py examples/least_privilege.json --fail-on LOW
+
+      - name: Generate and validate SARIF security-review evidence
+        if: matrix.python-version == '3.12'
+        run: |
+          python src/iam_auditor.py examples/admin_wildcard.json --sarif > iam-admin-findings.sarif
+          python src/iam_auditor.py examples/least_privilege.json --sarif > iam-least-privilege.sarif
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          risky = json.loads(Path("iam-admin-findings.sarif").read_text())
+          clean = json.loads(Path("iam-least-privilege.sarif").read_text())
+          assert risky["version"] == clean["version"] == "2.1.0"
+          assert risky["runs"][0]["tool"]["driver"]["name"] == "IAM Policy Auditor"
+          assert any(row["level"] == "error" for row in risky["runs"][0]["results"])
+          assert clean["runs"][0]["results"] == []
+          PY
+
+      - name: Upload offline IAM SARIF examples
+        if: matrix.python-version == '3.12'
+        uses: actions/upload-artifact@v4
+        with:
+          name: iam-sarif-example-evidence
+          path: |
+            iam-admin-findings.sarif
+            iam-least-privilege.sarif
+          if-no-files-found: error
+          retention-days: 30
