@@ -504,8 +504,42 @@ def audit_statement(stmt: dict[str, Any], index: int) -> list[Finding]:
                             and not identity.endswith("/")
                         ))
                     )
+                # Ordinary S3 bucket/object ARNs have empty region/account
+                # slots. Regional S3 resources (access points, jobs, etc.)
+                # require an account and a typed resource/name selector.
+                # A six-field ARN such as s3:us-east-1:123...:reports-bucket
+                # is not a valid bucket boundary and must not audit clean.
+                # Multi-Region Access Points use an empty region but a fixed
+                # account and an accesspoint/name selector. This is a shape
+                # check, not an exhaustive S3 resource grammar validator.
+                valid_s3_shape = True
+                if valid_arn_shape and parts[2] == "s3":
+                    region, account, identity = parts[3], parts[4], parts[5]
+                    valid_account = (
+                        re.fullmatch(r"[0-9*?]{1,12}", account) is not None
+                    )
+                    valid_region = (
+                        not region or
+                        re.fullmatch(r"[a-z0-9*?-]+", region) is not None
+                    )
+                    typed_identity = (
+                        "/" in identity and bool(identity.split("/", 1)[1])
+                    )
+                    if not region and not account:
+                        valid_s3_shape = True  # Bucket/object ARN.
+                    elif not valid_account or not valid_region:
+                        valid_s3_shape = False
+                    elif not region:
+                        # Multi-Region Access Point ARN.
+                        valid_s3_shape = (
+                            identity.startswith("accesspoint/") and typed_identity
+                        )
+                    else:
+                        valid_s3_shape = typed_identity
                 if not _valid_policy_label(resource) or (
-                    resource != "*" and (not valid_arn_shape or not valid_iam_shape)
+                    resource != "*" and (
+                        not valid_arn_shape or not valid_iam_shape or not valid_s3_shape
+                    )
                 ):
                     raise ValueError(
                         f"Statement #{index}: {resource_key} contains an invalid resource identifier"
