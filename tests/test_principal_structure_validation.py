@@ -55,4 +55,6 @@ def test_valid_deny_notprincipal_remains_supported():
     report = audit_policy(_policy(
         "NotPrincipal", {"AWS": "arn:aws:iam::123456789012:root"}, effect="Deny"
     ))
-    assert report.findings == []
+    assert len(report.findings) == 1
+    assert report.findings[0].title == "Deny with NotPrincipal and permissions boundaries"
+    assert report.findings[0].severity == "MEDIUM"
