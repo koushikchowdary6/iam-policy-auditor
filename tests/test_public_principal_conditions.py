@@ -27,7 +27,7 @@ def _public_severity(condition):
 @pytest.mark.parametrize("condition", [
     {"Bool": {"aws:SecureTransport": "true"}},
     {"Bool": {"aws:MultiFactorAuthPresent": "true"}},
-    {"StringNotEquals": {"aws:PrincipalOrgID": "o-example"}},
+    {"StringNotEquals": {"aws:PrincipalOrgID": "o-example123"}},
     {"StringEqualsIfExists": {"aws:PrincipalOrgID": "o-example"}},
     {"NotIpAddress": {"aws:SourceIp": "10.0.0.0/8"}},
 ])
@@ -39,7 +39,7 @@ def test_unrelated_or_negative_conditions_do_not_downgrade_public_access(conditi
     {"IpAddress": {"aws:SourceIp": "10.0.0.0/8"}},
     {"StringEquals": {"aws:PrincipalOrgID": "o-example"}},
     {"StringEquals": {"aws:PrincipalAccount": "123456789012"}},
-    {"StringEquals": {"aws:SourceVpce": "vpce-123"}},
+    {"StringEquals": {"aws:SourceVpce": "vpce-12345678"}},
     {"ArnLike": {"aws:PrincipalArn": "arn:aws:iam::123456789012:role/team-*"}},
 ])
 def test_recognized_positive_scoping_condition_is_medium(condition):
