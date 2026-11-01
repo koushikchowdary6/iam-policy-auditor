@@ -44,15 +44,21 @@ jobs:
         run: |
           python src/iam_auditor.py examples/admin_wildcard.json --sarif > iam-admin-findings.sarif
           python src/iam_auditor.py examples/least_privilege.json --sarif > iam-least-privilege.sarif
+          python src/iam_auditor.py examples/deny_notprincipal_boundary.json --sarif > iam-notprincipal-boundary.sarif
           python - <<'PY'
           import json
           from pathlib import Path
           risky = json.loads(Path("iam-admin-findings.sarif").read_text())
           clean = json.loads(Path("iam-least-privilege.sarif").read_text())
+          boundary = json.loads(Path("iam-notprincipal-boundary.sarif").read_text())
           assert risky["version"] == clean["version"] == "2.1.0"
           assert risky["runs"][0]["tool"]["driver"]["name"] == "IAM Policy Auditor"
           assert any(row["level"] == "error" for row in risky["runs"][0]["results"])
           assert clean["runs"][0]["results"] == []
+          boundary_results = boundary["runs"][0]["results"]
+          assert len(boundary_results) == 1
+          assert boundary_results[0]["level"] == "warning"
+          assert boundary_results[0]["ruleId"] == "IAM-DENY-WITH-NOTPRINCIPAL-AND-PERMISSIONS-BOUNDARIES"
           PY
 
       - name: Upload offline IAM SARIF examples
@@ -63,5 +69,6 @@ jobs:
           path: |
             iam-admin-findings.sarif
             iam-least-privilege.sarif
+            iam-notprincipal-boundary.sarif
           if-no-files-found: error
           retention-days: 30

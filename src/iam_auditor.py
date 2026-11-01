@@ -495,6 +495,22 @@ def audit_statement(stmt: dict[str, Any], index: int) -> list[Finding]:
 
     findings: list[Finding] = []
     if effect == "Deny":
+        if "NotPrincipal" in stmt:
+            # This is not an Allow grant, but it is not necessarily benign.
+            # AWS documents that a resource-policy Deny with NotPrincipal
+            # also denies IAM identities with permissions boundaries, even
+            # when those identities appear in the NotPrincipal exception.
+            # Without live account context, report the documented hazard
+            # rather than claiming that any particular identity is blocked.
+            findings.append(Finding(
+                "MEDIUM", "Deny with NotPrincipal and permissions boundaries",
+                "AWS warns that Deny with NotPrincipal in resource policies can "
+                "deny IAM users or roles with permissions boundaries even when "
+                "listed as exceptions. Review the resource-policy context and "
+                "consider Principal '*' with ArnNotEquals on aws:PrincipalArn "
+                "where supported; this static audit cannot verify effective access.",
+                index,
+            ))
         return findings
 
     actions = [a.lower() for a in _as_list(stmt.get("Action"))]

@@ -44,4 +44,10 @@ def test_unsupported_principal_type_fails_closed(field, effect, principal):
     {"AWS": ["arn:aws:iam::123456789012:root", "arn:aws:iam::123456789012:role/reader"]},
 ])
 def test_supported_principal_types_remain_valid(field, effect, principal):
-    assert audit_policy(_policy(field, principal, effect)).findings == []
+    report = audit_policy(_policy(field, principal, effect))
+    if field == "NotPrincipal":
+        assert len(report.findings) == 1
+        assert report.findings[0].title == "Deny with NotPrincipal and permissions boundaries"
+        assert report.findings[0].severity == "MEDIUM"
+    else:
+        assert report.findings == []
