@@ -50,7 +50,7 @@ def test_independent_org_boundary_still_restricts_full_cidr_union():
         "Resource": "arn:aws:s3:::example/*",
         "Condition": {
             "IpAddress": {"aws:SourceIp": ["0.0.0.0/1", "128.0.0.0/1"]},
-            "StringEquals": {"aws:PrincipalOrgID": "o-example"},
+            "StringEquals": {"aws:PrincipalOrgID": "o-example123"},
         },
     }]}
     report = audit_policy(policy)
