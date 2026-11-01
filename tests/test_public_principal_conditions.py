@@ -37,7 +37,7 @@ def test_unrelated_or_negative_conditions_do_not_downgrade_public_access(conditi
 
 @pytest.mark.parametrize("condition", [
     {"IpAddress": {"aws:SourceIp": "10.0.0.0/8"}},
-    {"StringEquals": {"aws:PrincipalOrgID": "o-example"}},
+    {"StringEquals": {"aws:PrincipalOrgID": "o-example123"}},
     {"StringEquals": {"aws:PrincipalAccount": "123456789012"}},
     {"StringEquals": {"aws:SourceVpce": "vpce-12345678"}},
     {"ArnLike": {"aws:PrincipalArn": "arn:aws:iam::123456789012:role/team-*"}},
