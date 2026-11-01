@@ -1,12 +1,13 @@
 """Unsupported NotPrincipal forms must not silently pass an IAM audit."""
 
+import json
 import sys
 from pathlib import Path
 
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
-from iam_auditor import audit_policy
+from iam_auditor import audit_policy, main
 
 
 def _statement(effect="Deny"):
@@ -63,3 +64,16 @@ def test_rejects_unsupported_statement_in_multi_statement_policy():
     }
     with pytest.raises(ValueError, match="NotPrincipal requires Effect Deny"):
         audit_policy({"Statement": [safe, _statement(effect="Allow")]})
+
+
+def test_notprincipal_warning_is_sarif_visible_and_ci_enforceable(tmp_path, capsys):
+    path = tmp_path / "notprincipal.json"
+    path.write_text(json.dumps({"Statement": [_statement()]}), encoding="utf-8")
+    assert main([str(path), "--sarif", "--fail-on", "MEDIUM"]) == 1
+    report = json.loads(capsys.readouterr().out)
+    result = report["runs"][0]["results"][0]
+    assert result["level"] == "warning"
+    assert result["ruleId"] == "IAM-DENY-WITH-NOTPRINCIPAL-AND-PERMISSIONS-BOUNDARIES"
+    assert result["properties"]["statement_index"] == 0
+    assert main([str(path), "--json", "--fail-on", "HIGH"]) == 0
+    assert json.loads(capsys.readouterr().out)["highest_severity"] == "MEDIUM"
