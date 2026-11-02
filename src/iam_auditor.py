@@ -430,6 +430,19 @@ def _privilege_escalation_matches(actions: list[str]) -> list[str]:
     return sorted(matched)
 
 
+def _valid_account_selector(value: str) -> bool:
+    """Accept fixed 12-digit AWS accounts or bounded wildcard selectors.
+
+    An eleven-digit *fixed* account number is not an AWS account boundary.
+    Keep explicit IAM glob patterns (including '*') valid and visible to
+    broad-resource findings rather than silently treating short numbers as
+    a legitimate narrowly scoped identity.
+    """
+    return bool(re.fullmatch(r"[0-9*?]{1,12}", value)) and (
+        len(value) == 12 or "*" in value or "?" in value
+    )
+
+
 def audit_statement(stmt: dict[str, Any], index: int) -> list[Finding]:
     # Direct Python callers can supply non-string mapping keys even though
     # JSON documents cannot. Reject them before sorting unsupported names:
@@ -496,7 +509,7 @@ def audit_statement(stmt: dict[str, Any], index: int) -> list[Finding]:
                     identity = parts[5]
                     valid_iam_shape = (
                         not parts[3]
-                        and re.fullmatch(r"[0-9*?]{1,12}", parts[4]) is not None
+                        and _valid_account_selector(parts[4])
                         and (identity in {"root", "*"} or (
                             "/" in identity
                             and re.fullmatch(r"[a-z0-9-]+", identity.split("/", 1)[0]) is not None
@@ -515,9 +528,7 @@ def audit_statement(stmt: dict[str, Any], index: int) -> list[Finding]:
                 valid_s3_shape = True
                 if valid_arn_shape and parts[2] == "s3":
                     region, account, identity = parts[3], parts[4], parts[5]
-                    valid_account = (
-                        re.fullmatch(r"[0-9*?]{1,12}", account) is not None
-                    )
+                    valid_account = _valid_account_selector(account)
                     valid_region = (
                         not region or
                         re.fullmatch(r"[a-z0-9*?-]+", region) is not None
