@@ -22,7 +22,7 @@ def test_full_admin_wildcard_is_high():
 
 def test_privilege_escalation_flagged():
     policy = {"Statement": [{"Effect": "Allow", "Action": ["iam:CreatePolicyVersion"],
-                             "Resource": "arn:aws:iam::123:policy/x"}]}
+                             "Resource": "arn:aws:iam::123456789012:policy/x"}]}
     report = audit_policy(policy)
     assert "Privilege-escalation action" in _titles(report)
     assert report.highest_severity == "HIGH"
