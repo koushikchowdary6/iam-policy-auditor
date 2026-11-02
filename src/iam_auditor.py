@@ -434,12 +434,13 @@ def _valid_account_selector(value: str) -> bool:
     """Accept fixed 12-digit AWS accounts or bounded wildcard selectors.
 
     An eleven-digit *fixed* account number is not an AWS account boundary.
-    Keep explicit IAM glob patterns (including '*') valid and visible to
-    broad-resource findings rather than silently treating short numbers as
-    a legitimate narrowly scoped identity.
+    '?' matches exactly one digit, so a shorter question-mark-only selector
+    cannot match any 12-digit AWS account. '*' can span the missing digits.
+    Keep valid IAM glob patterns visible to broad-resource findings instead
+    of silently accepting impossible account boundaries.
     """
     return bool(re.fullmatch(r"[0-9*?]{1,12}", value)) and (
-        len(value) == 12 or "*" in value or "?" in value
+        len(value) == 12 or "*" in value
     )
 
 
