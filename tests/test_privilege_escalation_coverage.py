@@ -28,6 +28,7 @@ def _escalation_findings(action, effect="Allow"):
     "iam:UpdateAssumeRolePolicy",
     "iam:AddUserToGroup",
     "iam:PutGroupPolicy",
+    "iam:UpdateAccessKey",
     "iam:DeleteUserPermissionsBoundary",
     "iam:DeleteRolePermissionsBoundary",
 ])
@@ -45,6 +46,7 @@ def test_new_high_risk_actions_are_reported(action):
         "iam:deleteuserpermissionsboundary",
     ]),
     ("iam:PutGroupPolic?", ["iam:putgrouppolicy"]),
+    ("IAM:UPDATEACCESSKE?", ["iam:updateaccesskey"]),
 ])
 def test_case_insensitive_action_globs_cover_new_paths(pattern, expected):
     findings = _escalation_findings(pattern)
