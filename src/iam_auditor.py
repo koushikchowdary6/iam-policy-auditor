@@ -31,6 +31,9 @@ PRIV_ESC_ACTIONS = {
     "iam:attachrolepolicy", "iam:attachgrouppolicy", "iam:putuserpolicy",
     "iam:putrolepolicy", "iam:creategrouppolicy", "iam:createaccesskey",
     "iam:createloginprofile", "iam:updateloginprofile", "iam:passrole",
+    # Reactivating an existing disabled access key can restore credential access
+    # for a target identity; actual impact depends on which keys can be updated.
+    "iam:updateaccesskey",
     # Trust-policy edits, group membership/policy changes, and removal of
     # permissions boundaries are common escalation building blocks when
     # paired with an attacker-controlled principal or privileged target.
