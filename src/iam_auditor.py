@@ -34,6 +34,10 @@ PRIV_ESC_ACTIONS = {
     # Reactivating an existing disabled access key can restore credential access
     # for a target identity; actual impact depends on which keys can be updated.
     "iam:updateaccesskey",
+    # Resetting an IAM user's service-specific credential can give a caller
+    # a replacement password for an integrated AWS service (for example CodeCommit).
+    # This is a potential credential-takeover path, not proof of effective access.
+    "iam:resetservicespecificcredential",
     # Trust-policy edits, group membership/policy changes, and removal of
     # permissions boundaries are common escalation building blocks when
     # paired with an attacker-controlled principal or privileged target.
